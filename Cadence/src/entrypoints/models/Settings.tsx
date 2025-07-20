@@ -6,7 +6,7 @@ export class Settings {
     public longBreakInterval: number = 4, // TODO: Default to every 4 cycles
     public longBreakEnabled: boolean = true, // TODO: Default to long breaks enabled
     public breakAutoStart: boolean = true, // Default to auto-start breaks
-    public focusAutoStart: boolean = true, // Default to auto-start focus
+    public focusAutoStart: boolean = false, // Default to not auto-start focus
   ) {}
 
   toJSON(): { 

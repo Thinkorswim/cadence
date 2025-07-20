@@ -19,7 +19,7 @@ export default defineBackground(() => {
                     longBreakInterval: 4, // Default to every 4 cycles
                     longBreakEnabled: true, // Default to long breaks enabled
                     breakAutoStart: true, // Default to auto-start breaks
-                    focusAutoStart: true, // Default to auto-start focus
+                    focusAutoStart: false, // Default to not auto-start focus
                 };
                 browser.storage.local.set({ settings: defaultSettings });
             }
@@ -40,9 +40,9 @@ export default defineBackground(() => {
                 const defaultSession = {
                     timerState: TimerState.Focus,
                     elapsedTime: 0,
-                    totalTime: 0,
-                    isStopped: true, // Default to stopped state
-                    isPaused: false, // Default to not paused
+                    totalTime: data.settings ? data.settings.focusTime : 25 * 60, // Default to 25 minutes in seconds
+                    isStopped: true,
+                    isPaused: false,
                 };
                 browser.storage.local.set({ session: defaultSession });
             }
@@ -65,10 +65,9 @@ export default defineBackground(() => {
         browser.storage.local.get(["session"], (data) => {
             let session = data.session;
             if (session && session.timerState === TimerState.Focus) {
-                session.elapsedTime += 1; // Increment elapsed time by 1 second
+                session.elapsedTime += 1;
 
                 // Check if the session has ended
-
                 if (session.elapsedTime >= session.totalTime) {
                     clearInterval(timer!);
                     timer = null;
@@ -83,7 +82,6 @@ export default defineBackground(() => {
                         });
                     }
 
-                    // TODO: Add session to history
                     browser.storage.local.get(["dailyStats", "settings"], (data) => {
                         const settings = data.settings;
                         const dailyStats = data.dailyStats || new DailyStats(
@@ -97,16 +95,13 @@ export default defineBackground(() => {
                             timeEnded: new Date()
                         });
 
-                        // if today is not the same as the dailyStats date, reset the dailyStats
                         if (dailyStats.date !== new Date().toLocaleDateString('en-CA').slice(0, 10)) {
-                            // add the dailyStats to historicalStats where historicalStats is a map of dates to DailyStats
                             browser.storage.local.get(["historicalStats"], (data) => {
                                 const historicalStats = data.historicalStats || {};
                                 historicalStats[dailyStats.date] = dailyStats.completedSessions;
                                 browser.storage.local.set({ historicalStats });
                             });
 
-                            // reset the dailyStats
                             dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
                             dailyStats.completedSessions = [];
                         }
@@ -120,11 +115,11 @@ export default defineBackground(() => {
                         session.totalTime = settings.shortBreakTime;
 
                         if (settings.breakAutoStart) {
-                            session.isStopped = false; // Set the session as not stopped
+                            session.isStopped = false;
                             setBadge(timeDisplayFormatBadge(session.totalTime), "green");
                             timer = setInterval(() => updateTime(), 1000);
                         } else {
-                            session.isStopped = true; // Set the session as stopped
+                            session.isStopped = true;
                             setBadge("", "green");
                         }
 
@@ -135,17 +130,13 @@ export default defineBackground(() => {
                 } else {
                     browser.storage.local.set({ session });
 
-                    // Update the badge with the elapsed time
                     setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "red");
-
-                    // broadcast message with the session data
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             } else if (session && session.timerState === TimerState.ShortBreak) {
-                session.elapsedTime += 1; // Increment elapsed time by 1 second
+                session.elapsedTime += 1;
 
                 // Check if the short break has ended
-
                 if (session.elapsedTime >= session.totalTime) {
                     clearInterval(timer!);
                     timer = null;
@@ -160,7 +151,6 @@ export default defineBackground(() => {
                         });
                     }
 
-                    // get the settings to see the short break time
                     browser.storage.local.get(["settings"], (data) => {
                         const settings = data.settings;
                         if (settings) {
@@ -171,11 +161,11 @@ export default defineBackground(() => {
                             session.totalTime = settings.focusTime;
 
                             if (settings.focusAutoStart) {
-                                session.isStopped = false; // Set the session as not stopped
+                                session.isStopped = false;
                                 timer = setInterval(() => updateTime(), 1000);
                                 setBadge(timeDisplayFormatBadge(session.totalTime), "red");
                             } else {
-                                session.isStopped = true; // Set the session as stopped
+                                session.isStopped = true;
                                 setBadge("", "red");
                             }
 
@@ -188,9 +178,7 @@ export default defineBackground(() => {
 
                     browser.storage.local.set({ session });
 
-                    // Update the badge with the elapsed time
                     setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
-                    // broadcast message with the session data
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             }
@@ -207,27 +195,27 @@ export default defineBackground(() => {
 
                     switch (request.action) {
                         case "startTimer":
-                            session.timerState = TimerState.Focus; // Assuming TimerState is imported from the correct module
+                            session.timerState = TimerState.Focus;
                             session.timeStarted = new Date();
-                            session.totalTime = settings.focusTime; // Set total time based on settings
-                            session.isStopped = false; // Set the session as not stopped
+                            session.totalTime = settings.focusTime;
+                            session.isStopped = false;
 
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "pauseTimer":
-                            session.isPaused = true; // Set the session as paused
+                            session.isPaused = true;
                             if (timer) {
                                 clearInterval(timer);
                                 timer = null;
                             }
                             break;
                         case "resumeTimer":
-                            session.isPaused = false; // Set the session as not paused
+                            session.isPaused = false;
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "stopTimer":
-                            session.isPaused = false; // Set the session as not paused
-                            session.isStopped = true; // Set the session as stopped
+                            session.isPaused = false;
+                            session.isStopped = true;
                             session.elapsedTime = 0;
                             session.timerState = TimerState.Focus;
                             session.timeStarted = new Date();
@@ -240,20 +228,20 @@ export default defineBackground(() => {
                             }
                             break;
                         case "startShortBreak":
-                            session.timerState = TimerState.ShortBreak; // Assuming TimerState is imported from the correct
+                            session.timerState = TimerState.ShortBreak;
                             session.timeStarted = new Date();
-                            session.totalTime = settings.shortBreakTime; // Set total time based on settings
-                            session.isStopped = false; // Set the session as not stopped
+                            session.totalTime = settings.shortBreakTime;
+                            session.isStopped = false;
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "skipBreak":
-                            session.timerState = TimerState.Focus; // Skip the break and go back to focus
-                            session.isPaused = false; // Set the session as not paused
-                            session.elapsedTime = 0; // Reset elapsed time
+                            session.timerState = TimerState.Focus;
+                            session.isPaused = false;
+                            session.elapsedTime = 0;
                             session.timeStarted = new Date();
                             session.timeEnded = null;
-                            session.totalTime = settings.focusTime; // Set total time based on settings
-                            session.isStopped = true; // Set the session as stopped
+                            session.totalTime = settings.focusTime;
+                            session.isStopped = true;
                             setBadge("", "red");
                             if (timer) {
                                 clearInterval(timer);
@@ -263,7 +251,7 @@ export default defineBackground(() => {
                     }
 
                     browser.runtime.sendMessage({ action: "updateSession", session });
-                    browser.storage.local.set({ session }); // Persist updated session
+                    browser.storage.local.set({ session });
                 });
             }
 
