@@ -1,0 +1,158 @@
+@import "tailwindcss";
+@config "../../tailwind.config.js";
+
+@plugin 'tailwindcss-animate';
+
+
+
+@layer base {
+    :root {
+        --background: 30 100% 98%;
+        --foreground: 351 6% 23%;
+        --card: 0 0% 100%;
+        --card-foreground: 351 6% 23%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 351 6% 23%;
+        --primary: 358 100% 55.7%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 3 84% 74%;
+        --secondary-foreground: 10 48% 48%;
+        --muted: 18 100% 96%;
+        --muted-foreground: 7 20% 40%;
+        --accent: 26 97% 74%;
+        --accent-foreground: 351 6% 23%;
+        --destructive: 355 78% 56%;
+        --border: 16 100% 92%;
+        --input: 16 100% 92%;
+        --ring: 12 100% 69%;
+        --chart-1: 12 100% 69%;
+        --chart-2: 26 97% 74%;
+        --chart-3: 25 100% 82%;
+        --chart-4: 16 100% 78%;
+        --chart-5: 10 55% 58%;
+        --sidebar: 18 100% 96%;
+        --sidebar-foreground: 351 6% 23%;
+        --sidebar-primary: 12 100% 69%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 26 97% 74%;
+        --sidebar-accent-foreground: 351 6% 23%;
+        --sidebar-border: 16 100% 92%;
+        --sidebar-ring: 12 100% 69%;
+        --green: 141.9 69.2% 58%;
+        
+        --radius: 0.75rem;
+    }
+  
+    .dark {
+        --background: 335 16% 15%;
+        --foreground: 20 30% 92%;
+        --card: 322 10% 21%;
+        --card-foreground: 20 30% 92%;
+        --popover: 322 10% 21%;
+        --popover-foreground: 20 30% 92%;
+        --primary: 12 100% 69%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 325 10% 25%;
+        --secondary-foreground: 20 30% 92%;
+        --muted: 322 10% 21%;
+        --muted-foreground: 21 22% 79%;
+        --accent: 26 97% 74%;
+        --accent-foreground: 335 16% 15%;
+        --destructive: 355 78% 56%;
+        --border: 325 10% 25%;
+        --input: 325 10% 25%;
+        --ring: 12 100% 69%;
+        --chart-1: 12 100% 69%;
+        --chart-2: 26 97% 74%;
+        --chart-3: 25 100% 82%;
+        --chart-4: 16 100% 78%;
+        --chart-5: 10 55% 58%;
+        --sidebar: 335 16% 15%;
+        --sidebar-foreground: 20 30% 92%;
+        --sidebar-primary: 12 100% 69%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 26 97% 74%;
+        --sidebar-accent-foreground: 335 16% 15%;
+        --sidebar-border: 325 10% 25%;
+        --sidebar-ring: 12 100% 69%;
+    }
+  }
+
+
+
+@layer base {
+
+    button:not([disabled]),
+    [role="button"]:not([disabled]) {
+        cursor: pointer;
+    }
+}
+
+@font-face {
+    font-family: 'Geist';
+    src: url('/fonts/Geist.woff2') format('woff2');
+    font-weight: 100 900;
+    /* Supports a range from 100 to 900 */
+    font-stretch: 75% 125%;
+    /* Optional: Adjusts width if supported */
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'GeistMono';
+    src: url('/fonts/GeistMono.woff2') format('woff2');
+    font-weight: 100 900;
+    /* Supports a range from 100 to 900 */
+    font-stretch: 75% 125%;
+    /* Optional: Adjusts width if supported */
+    font-style: normal;
+}
+
+
+@layer base {
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* General circular container */
+.circular-slider-container {
+    position: relative;
+    width: 200px;
+    /* Adjust size */
+    height: 200px;
+    border-radius: 50%;
+    /* Circular container */
+}
+
+/* Style the slider track */
+.slider-track {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(#00f 0%, #0f0 50%, #f00 100%);
+    clip-path: circle(50%);
+}
+
+.no-arrows {
+    /* Remove arrows for modern browsers */
+    -moz-appearance: textfield;
+    /* Firefox */
+    -webkit-appearance: none;
+    /* Chrome, Safari, Edge */
+    appearance: none;
+    /* Standard */
+}
+
+.no-arrows::-webkit-inner-spin-button,
+.no-arrows::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    /* Remove for Chrome */
+    margin: 0;
+    /* Optional: reset margins */
+}
