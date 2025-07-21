@@ -12,7 +12,7 @@ The extension never saves, sends or uses any of your information for purposes ot
 
 ## Install Locally (Chrome)
 
-1. Download the latest .zip file version from [https://github.com/Thinkorswim/cadence/releases/tag/release](https://github.com/Thinkorswim/cadence/releases/tag/release)
+1. Download the latest .zip file version from [https://github.com/Thinkorswim/cadence/releases/tag/release](https://github.com/Thinkorswim/cadence/releases)
 2. Unzip the file and you should have a folder `cadence-chrome`
 3. Move the folder to a permanent location on your computer (do not delete the folder after installation).
 4. Go to the extensions page: chrome://extensions
