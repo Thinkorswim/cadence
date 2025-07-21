@@ -19,8 +19,11 @@ import {
 import { Button } from "@/components/ui/button"
 
 
+
+import { HistoricalStats } from '../models/HistoricalStats';
+
 type SessionsPerDayProps = {
-    historicalStats: Record<string, Record<string, number>>,
+    historicalStats: HistoricalStats,
 }
 
 export function SessionsPerDayChart({ historicalStats }: SessionsPerDayProps) {
@@ -50,8 +53,6 @@ export function SessionsPerDayChart({ historicalStats }: SessionsPerDayProps) {
             return date.toLocaleDateString('en-CA').slice(0, 10)
         }).reverse()
 
-
-
         const chartConfig = {
             "Sessions": {
                 label: "Sessions",
@@ -74,7 +75,11 @@ export function SessionsPerDayChart({ historicalStats }: SessionsPerDayProps) {
                     : new Date(date).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
             };
 
-            data["Sessions"] = historicalStats[date] ? historicalStats[date].length : 0;
+            let sessionsCount = 0;
+            if (historicalStats && historicalStats.stats && historicalStats.stats[date]) {
+                sessionsCount = Array.isArray(historicalStats.stats[date]) ? historicalStats.stats[date].length : 0;
+            }
+            data["Sessions"] = sessionsCount;
 
             return data;
         });

@@ -1,7 +1,8 @@
 import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
-import { Dot, Settings, ChartNoAxesColumn, Info, Pencil } from 'lucide-react'
+import { Dot, ChartNoAxesColumn, Info, Pencil } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -10,6 +11,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
 import { SessionsPerDayChart } from './SessionsPerDayChart';
+import { Settings } from '../models/Settings';
+import { Session } from '../models/Session';
+import { TimerState } from '../models/TimerState';
+import { DailyStats } from '../models/DailyStats';
+import { HistoricalStats } from '../models/HistoricalStats';
 
 function Options() {
 
@@ -44,7 +50,7 @@ function Options() {
   const [secondaryColor, setSecondaryColor] = useState('');
 
   const [activeTab, setActiveTab] = useState<string>('settings');
-  const [historicalStats, setHistoricalStats] = useState<Record<string, any>>({});
+  const [historicalStats, setHistoricalStats] = useState<HistoricalStats>(new HistoricalStats());
 
   const [focusTimeCircle, setFocusTimeCircle] = useState<ISettingsPointer[]>([
     {
@@ -104,33 +110,46 @@ function Options() {
 
   const handleStatisticsLoad = () => {
     browser.storage.local.get(['dailyStats', 'historicalStats'], (data) => {
-      const dailyStatistics = data.dailyStats;
-      const historicalStats = data.historicalStats;
+      const dailyStatistics: DailyStats = DailyStats.fromJSON(data.dailyStats) || new DailyStats();
+      const historicalStatsObj: HistoricalStats = HistoricalStats.fromJSON(data.historicalStats);
 
-      historicalStats[dailyStatistics.date] = dailyStatistics.completedSessions;
+      // Save completed sessions for the current date
+      historicalStatsObj.stats[dailyStatistics.date] = dailyStatistics.completedSessions ? dailyStatistics.completedSessions : [];
 
-      browser.storage.local.set({ historicalStats: historicalStats });
+      browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
 
-      setHistoricalStats(historicalStats);
+      setHistoricalStats(historicalStatsObj);
     });
   }
 
 
   const handleSaveFocusTime = () => {
-    browser.storage.local.get(['settings'], (result) => {
-      const settings = result.settings || {};
+    browser.storage.local.get(['settings', 'session'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      const session: Session = Session.fromJSON(data.session) || new Session();
+
       settings.focusTime = focusTime;
-      browser.storage.local.set({ settings }, () => {
+      if (session.timerState === TimerState.Focus) {
+        session.totalTime = focusTime;
+      }
+
+      browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setFocusTimeDialogOpen(false);
       });
     });
   };
 
   const handleSaveBreakTime = () => {
-    browser.storage.local.get(['settings'], (result) => {
-      const settings = result.settings || {};
+    browser.storage.local.get(['settings', 'session'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      const session: Session = Session.fromJSON(data.session) || new Session();
+
       settings.shortBreakTime = breakTime;
-      browser.storage.local.set({ settings }, () => {
+      if (session.timerState === TimerState.ShortBreak) {
+        session.totalTime = breakTime;
+      }
+      
+      browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setShortBreakDialogOpen(false);
       });
     });
@@ -139,19 +158,19 @@ function Options() {
 
   const handleToggleAutoStartFocus = (checked: boolean) => {
     setFocusAutoStart(checked);
-    browser.storage.local.get(['settings'], (result) => {
-      const settings = result.settings || {};
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.focusAutoStart = checked;
-      browser.storage.local.set({ settings });
+      browser.storage.local.set({ settings: settings.toJSON() });
     });
   }
 
   const handleToggleBreakAutoStart = (checked: boolean) => {
     setBreakAutoStart(checked);
-    browser.storage.local.get(['settings'], (result) => {
-      const settings = result.settings || {};
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.breakAutoStart = checked;
-      browser.storage.local.set({ settings });
+      browser.storage.local.set({ settings: settings.toJSON() });
     });
   }
 
@@ -167,7 +186,7 @@ function Options() {
 
               <TabsList className='py-5 px-2'>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="statistics" onClick={handleStatisticsLoad}><ChartNoAxesColumn className='w-5 h-5 mr-1' /> Statistics </TabsTrigger>
-                <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="settings" ><Settings className='w-5 h-5 mr-1' />  Settings</TabsTrigger>
+                <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="settings" ><SettingsIcon className='w-5 h-5 mr-1' />  Settings</TabsTrigger>
               </TabsList>
             </div>
 

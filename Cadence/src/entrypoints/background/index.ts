@@ -3,6 +3,9 @@ import { TimerState } from "../models/TimerState";
 import { timeDisplayFormatBadge } from "@/lib/utils";
 import { DailyStats } from "../models/DailyStats";
 import { CompletedSession } from "../models/CompletedSession";
+import { HistoricalStats } from "../models/HistoricalStats";
+import { Session } from "../models/Session";
+import { Settings } from "../models/Settings";
 
 export default defineBackground(() => {
     browser.runtime.onInstalled.addListener((object) => {
@@ -12,7 +15,7 @@ export default defineBackground(() => {
 
         browser.storage.local.get(["settings", "session", "dailyStats", "historicalStats"], (data) => {
             if (!data.settings) {
-                const defaultSettings = {
+                const defaultSettings: Settings = Settings.fromJSON({
                     focusTime: 25 * 60, // Default to 25 minutes in seconds
                     shortBreakTime: 5 * 60, // Default to 5 minutes in seconds
                     longBreakTime: 15 * 60, // Default to 15 minutes in seconds
@@ -20,31 +23,35 @@ export default defineBackground(() => {
                     longBreakEnabled: true, // Default to long breaks enabled
                     breakAutoStart: true, // Default to auto-start breaks
                     focusAutoStart: false, // Default to not auto-start focus
-                };
-                browser.storage.local.set({ settings: defaultSettings });
+                });
+
+                browser.storage.local.set({ settings: defaultSettings.toJSON() });
             }
 
             if (!data.dailyStats) {
-                const defaultDailyStats = new DailyStats(
-                    new Date().toLocaleDateString('en-CA').slice(0, 10),
-                    []
-                );
-                browser.storage.local.set({ dailyStats: defaultDailyStats });
+                const defaultDailyStats: DailyStats = DailyStats.fromJSON({
+                    date: new Date().toLocaleDateString('en-CA').slice(0, 10),
+                    completedSessions: []
+                });
+
+                browser.storage.local.set({ dailyStats: defaultDailyStats.toJSON() });
             }
 
             if (!data.historicalStats) {
-                browser.storage.local.set({ historicalStats: {} });
+                browser.storage.local.set({ historicalStats: new HistoricalStats().toJSON() });
             }
 
             if (!data.session) {
-                const defaultSession = {
-                    timerState: TimerState.Focus,
+                const defaultSession: Session = Session.fromJSON({
                     elapsedTime: 0,
+                    timerState: TimerState.Focus,
                     totalTime: data.settings ? data.settings.focusTime : 25 * 60, // Default to 25 minutes in seconds
                     isStopped: true,
                     isPaused: false,
-                };
-                browser.storage.local.set({ session: defaultSession });
+                    timeStarted: new Date().toISOString(),
+                });
+
+                browser.storage.local.set({ session: defaultSession.toJSON() });
             }
         });
     });
@@ -53,17 +60,20 @@ export default defineBackground(() => {
 
     browser.runtime.onStartup.addListener(() => {
         browser.storage.local.get(["session"], (data) => {
-            if (data.session && !data.session.isStopped && !data.session.isPaused) {
-                data.session.isPaused = true;
-                browser.runtime.sendMessage({ action: "updateSession", session: data.session });
-                browser.storage.local.set({ session: data.session });
+            if (data.session) {
+                const session: Session = Session.fromJSON(data.session);
+                if (!session.isStopped && !session.isPaused) {
+                    session.isPaused = true;
+                    browser.runtime.sendMessage({ action: "updateSession", session });
+                    browser.storage.local.set({ session: session.toJSON() });
+                }
             }
         });
     });
 
     const updateTime = () => {
         browser.storage.local.get(["session"], (data) => {
-            let session = data.session;
+            let session: Session = Session.fromJSON(data.session);
             if (session && session.timerState === TimerState.Focus) {
                 session.elapsedTime += 1;
 
@@ -83,35 +93,31 @@ export default defineBackground(() => {
                     }
 
                     browser.storage.local.get(["dailyStats", "settings"], (data) => {
-                        const settings = data.settings;
-                        const dailyStats = data.dailyStats || new DailyStats(
-                            new Date().toLocaleDateString('en-CA').slice(0, 10),
-                            []
-                        );
+                        const settings: Settings = Settings.fromJSON(data.settings);
+                        const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
 
                         const completedSession = CompletedSession.fromJSON({
                             totalTime: session.totalTime,
-                            timeStarted: session.timeStarted,
-                            timeEnded: new Date()
+                            timeStarted: session.timeStarted.toISOString(),
+                            timeEnded: new Date().toISOString()
                         });
 
                         if (dailyStats.date !== new Date().toLocaleDateString('en-CA').slice(0, 10)) {
                             browser.storage.local.get(["historicalStats"], (data) => {
-                                const historicalStats = data.historicalStats || {};
-                                historicalStats[dailyStats.date] = dailyStats.completedSessions;
-                                browser.storage.local.set({ historicalStats });
+                                const historicalStats = HistoricalStats.fromJSON(data.historicalStats);
+                                historicalStats.stats[dailyStats.date] = dailyStats.completedSessions ? dailyStats.completedSessions : [];
+                                browser.storage.local.set({ historicalStats: historicalStats.toJSON() });
                             });
 
                             dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
                             dailyStats.completedSessions = [];
                         }
 
-                        dailyStats.completedSessions.push(CompletedSession.fromJSON(completedSession));
+                        dailyStats.completedSessions.push(completedSession);
 
                         session.timerState = TimerState.ShortBreak;
                         session.elapsedTime = 0;
                         session.timeStarted = new Date();
-                        session.timeEnded = null;
                         session.totalTime = settings.shortBreakTime;
 
                         if (settings.breakAutoStart) {
@@ -123,12 +129,12 @@ export default defineBackground(() => {
                             setBadge("", "green");
                         }
 
-                        browser.storage.local.set({ dailyStats, session });
+                        browser.storage.local.set({ dailyStats: dailyStats.toJSON(), session: session.toJSON() });
                         browser.runtime.sendMessage({ action: "updateSession", session });
                     });
 
                 } else {
-                    browser.storage.local.set({ session });
+                    browser.storage.local.set({ session: session.toJSON() });
 
                     setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "red");
                     browser.runtime.sendMessage({ action: "updateSession", session });
@@ -152,12 +158,11 @@ export default defineBackground(() => {
                     }
 
                     browser.storage.local.get(["settings"], (data) => {
-                        const settings = data.settings;
+                        const settings: Settings = Settings.fromJSON(data.settings);
                         if (settings) {
                             session.timerState = TimerState.Focus;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();
-                            session.timeEnded = null;
                             session.totalTime = settings.focusTime;
 
                             if (settings.focusAutoStart) {
@@ -169,14 +174,13 @@ export default defineBackground(() => {
                                 setBadge("", "red");
                             }
 
-                            browser.storage.local.set({ session });
+                            browser.storage.local.set({ session: session.toJSON() });
                             browser.runtime.sendMessage({ action: "updateSession", session });
                         }
                     });
 
                 } else {
-
-                    browser.storage.local.set({ session });
+                    browser.storage.local.set({ session: session.toJSON() });
 
                     setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
@@ -186,12 +190,12 @@ export default defineBackground(() => {
     };
 
     browser.runtime.onMessage.addListener(
-        (request: { action: string, params?: any }, sender, sendResponse) => {
+        (request: { action: string, params?: any }, _sender, _sendResponse) => {
             const validActions = ["startTimer", "pauseTimer", "resumeTimer", "stopTimer", "startShortBreak", "skipBreak"];
             if (validActions.includes(request.action)) {
                 browser.storage.local.get(["session", "settings"], (data) => {
-                    let session = data.session;
-                    const settings = data.settings;
+                    let session: Session = Session.fromJSON(data.session);
+                    const settings: Settings = Settings.fromJSON(data.settings);
 
                     switch (request.action) {
                         case "startTimer":
@@ -219,7 +223,6 @@ export default defineBackground(() => {
                             session.elapsedTime = 0;
                             session.timerState = TimerState.Focus;
                             session.timeStarted = new Date();
-                            session.timeEnded = null;
                             setBadge("", "red");
 
                             if (timer) {
@@ -239,7 +242,6 @@ export default defineBackground(() => {
                             session.isPaused = false;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();
-                            session.timeEnded = null;
                             session.totalTime = settings.focusTime;
                             session.isStopped = true;
                             setBadge("", "red");
@@ -251,7 +253,7 @@ export default defineBackground(() => {
                     }
 
                     browser.runtime.sendMessage({ action: "updateSession", session });
-                    browser.storage.local.set({ session });
+                    browser.storage.local.set({ session: session.toJSON() });
                 });
             }
 

@@ -5,19 +5,19 @@ export class CompletedSession {
     public timeEnded: Date
   ) {}
 
-  toJSON(): { totalTime: number; timeStarted: Date; timeEnded: Date } {
+  toJSON(): { totalTime: number; timeStarted: string; timeEnded: string } {
     return {
       totalTime: this.totalTime,
-      timeStarted: this.timeStarted,
-      timeEnded: this.timeEnded,
+      timeStarted: this.timeStarted.toISOString(),
+      timeEnded: this.timeEnded.toISOString(),
     };
   }
 
-  static fromJSON(json: { totalTime: number; timeStarted: Date; timeEnded: Date }): CompletedSession {
+  static fromJSON(json: { totalTime: number; timeStarted: string; timeEnded: string }): CompletedSession {
     return new CompletedSession(
       json.totalTime,
-      json.timeStarted instanceof Date ? json.timeStarted : new Date(json.timeStarted),
-      json.timeEnded instanceof Date ? json.timeEnded : new Date(json.timeEnded)
+      new Date(json.timeStarted),
+      new Date(json.timeEnded)
     );
   }
 }

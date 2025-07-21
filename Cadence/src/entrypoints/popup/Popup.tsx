@@ -47,10 +47,11 @@ function Popup() {
   useEffect(() => {
     browser.storage.local.get(["session"], (data) => {
       if (data.session) {
-        setSession(data.session);
-        setTimerTime(data.session.totalTime - data.session.elapsedTime);
+        const sessionData: Session = Session.fromJSON(data.session);
+        setSession(sessionData);
+        setTimerTime(sessionData.totalTime - sessionData.elapsedTime);
         setStartAngle(90);
-        setEndAngle(90 + (360 * (data.session.totalTime - data.session.elapsedTime)) / data.session.totalTime);
+        setEndAngle(90 + (360 * (sessionData.totalTime - sessionData.elapsedTime)) / sessionData.totalTime);
       }
     });
   }, []);

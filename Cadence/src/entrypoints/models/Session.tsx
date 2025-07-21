@@ -13,7 +13,7 @@ export class Session {
   toJSON(): {
     elapsedTime: number;
     totalTime: number;
-    timeStarted: Date;
+    timeStarted: string;
     timerState: TimerState;
     isPaused: boolean;
     isStopped: boolean;
@@ -21,7 +21,7 @@ export class Session {
     return {
       elapsedTime: this.elapsedTime,
       totalTime: this.totalTime,
-      timeStarted: this.timeStarted,
+      timeStarted: this.timeStarted.toISOString(),
       timerState: this.timerState,
       isPaused: this.isPaused,
       isStopped: this.isStopped,
@@ -32,14 +32,14 @@ export class Session {
     elapsedTime: number;
     totalTime: number;
     timerState: TimerState;
-    timeStarted: Date;
+    timeStarted: string;
     isPaused: boolean;
     isStopped?: boolean;
   }): Session {
     return new Session(
       json.elapsedTime,
       json.totalTime,
-      json.timeStarted instanceof Date ? json.timeStarted : new Date(json.timeStarted),
+      new Date(json.timeStarted),
       json.timerState,
       json.isPaused,
       json.isStopped ?? false
