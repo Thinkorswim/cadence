@@ -326,7 +326,7 @@ function Popup() {
         <div className="flex flex-col gap-3 items-center">
           <div className="flex flex-col gap-2">
             {Array.from({ length: Math.ceil(dailySessionsGoal / 5) }, (_, rowIndex) => (
-              <div key={rowIndex} className="flex gap-4 justify-center">
+              <div key={rowIndex} className="flex gap-5 justify-center">
                 {Array.from({ length: Math.min(5, dailySessionsGoal - rowIndex * 5) }, (_, colIndex) => {
                     const sessionIndex = rowIndex * 5 + colIndex;
                     const isCompleted = sessionIndex < completedSessions;
