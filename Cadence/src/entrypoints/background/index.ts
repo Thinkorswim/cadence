@@ -23,10 +23,19 @@ export default defineBackground(() => {
                     longBreakEnabled: true, // Default to long breaks enabled
                     breakAutoStart: true, // Default to auto-start breaks
                     focusAutoStart: false, // Default to not auto-start focus
+                    dailySessionsGoal: 10 // Default to 10 sessions per day
                 });
 
                 browser.storage.local.set({ settings: defaultSettings.toJSON() });
+            } else {
+                // Backward compatibility for dailySessionsGoal
+                if (data.settings.dailySessionsGoal === undefined) {
+                    const updatedSettings: Settings = Settings.fromJSON(data.settings);
+                    updatedSettings.dailySessionsGoal = 10;
+                    browser.storage.local.set({ settings: updatedSettings.toJSON() });
+                }
             }
+
 
             if (!data.dailyStats) {
                 const defaultDailyStats: DailyStats = DailyStats.fromJSON({

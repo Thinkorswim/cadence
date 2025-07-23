@@ -7,6 +7,7 @@ export class Settings {
     public longBreakEnabled: boolean = true, // TODO: Default to long breaks enabled
     public breakAutoStart: boolean = true, // Default to auto-start breaks
     public focusAutoStart: boolean = false, // Default to not auto-start focus
+    public dailySessionsGoal: number = 10 // Default to 10 sessions per day
   ) {}
 
   toJSON(): { 
@@ -17,6 +18,7 @@ export class Settings {
     longBreakEnabled: boolean; 
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
+    dailySessionsGoal: number;
    } {
     return {
         focusTime: this.focusTime,
@@ -26,6 +28,7 @@ export class Settings {
         longBreakEnabled: this.longBreakEnabled,
         breakAutoStart: this.breakAutoStart,
         focusAutoStart: this.focusAutoStart,
+        dailySessionsGoal: this.dailySessionsGoal,
     };
   }
 
@@ -37,6 +40,7 @@ export class Settings {
     longBreakEnabled: boolean; 
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
+    dailySessionsGoal?: number;
    }): Settings {
     return new Settings(
         json.focusTime,
@@ -45,7 +49,8 @@ export class Settings {
         json.longBreakInterval,
         json.longBreakEnabled,
         json.breakAutoStart,
-        json.focusAutoStart
+        json.focusAutoStart,
+        json.dailySessionsGoal ?? 10 // Default to 10 if goal not provided
     );
   }
 }

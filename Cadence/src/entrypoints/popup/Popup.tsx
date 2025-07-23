@@ -14,6 +14,8 @@ import { cn, timeDisplayFormatBadge } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Session } from '../models/Session';
 import { TimerState } from '../models/TimerState';
+import { Settings } from '../models/Settings';
+import { DailyStats } from '../models/DailyStats';
 
 const chartConfig = {
   progress: {
@@ -38,6 +40,8 @@ function Popup() {
   const [timerTime, setTimerTime] = useState(25 * 60)
 
   const [session, setSession] = useState<Session | null>(null)
+  const [dailySessionsGoal, setDailySessionsGoal] = useState(10)
+  const [completedSessions, setCompletedSessions] = useState(0)
 
   const openStatisticsPage = () => {
     const url = browser.runtime.getURL('/options.html?section=statistics');
@@ -45,13 +49,23 @@ function Popup() {
   }
 
   useEffect(() => {
-    browser.storage.local.get(["session"], (data) => {
+    browser.storage.local.get(["session", "settings", "dailyStats"], (data) => {
       if (data.session) {
         const sessionData: Session = Session.fromJSON(data.session);
         setSession(sessionData);
         setTimerTime(sessionData.totalTime - sessionData.elapsedTime);
         setStartAngle(90);
         setEndAngle(90 + (360 * (sessionData.totalTime - sessionData.elapsedTime)) / sessionData.totalTime);
+      }
+      
+      if (data.settings) {
+        const settings: Settings = Settings.fromJSON(data.settings);
+        setDailySessionsGoal(settings.dailySessionsGoal || 10);
+      }
+      
+      if (data.dailyStats) {
+        const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
+        setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
       }
     });
   }, []);
@@ -64,6 +78,14 @@ function Popup() {
         setTimerTime(message.session.totalTime - message.session.elapsedTime);
         setStartAngle(90);
         setEndAngle(90 + (360 * (message.session.totalTime - message.session.elapsedTime)) / message.session.totalTime);
+        
+        // Update completed sessions count when session updates
+        browser.storage.local.get(["dailyStats"], (data) => {
+          if (data.dailyStats) {
+            const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
+            setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
+          }
+        });
       }
     }
 
@@ -146,7 +168,7 @@ function Popup() {
         </RadialBarChart>
       </ChartContainer>
 
-      <div className="flex justify-center pb-8 mt-6">
+      <div className="flex justify-center pb-8 mt-4">
         {session?.isStopped && session?.timerState === TimerState.Focus && (
           <Button
             className="w-36 py-5 text-lg font-semibold"
@@ -297,6 +319,62 @@ function Popup() {
             </Button>
           </div>
         )}
+      </div>
+
+      {/* Session Goal Visualization */}
+      <div className="pb-6 px-4">
+        <div className="flex flex-col gap-3 items-center">
+          <div className="flex flex-col gap-2">
+            {Array.from({ length: Math.ceil(dailySessionsGoal / 5) }, (_, rowIndex) => (
+              <div key={rowIndex} className="flex gap-4 justify-center">
+                {Array.from({ length: Math.min(5, dailySessionsGoal - rowIndex * 5) }, (_, colIndex) => {
+                    const sessionIndex = rowIndex * 5 + colIndex;
+                    const isCompleted = sessionIndex < completedSessions;
+                    const isCurrentSession = sessionIndex === completedSessions && !session?.isStopped && session?.timerState === TimerState.Focus;
+                    const isLastCompleted = sessionIndex === completedSessions - 1;
+                    const isLastCircle = sessionIndex === dailySessionsGoal - 1;
+                    
+                    if (isCurrentSession) {
+                      // Progressive circle fill for current focus session
+                      const progress = session ? (session.elapsedTime / session.totalTime) : 0;
+                      const progressPercentage = Math.max(5, Math.min(95, progress * 100)); // 5% to 95% range for visual offset
+                      
+                      return (
+                        <div
+                          key={sessionIndex}
+                          className="w-8 h-8 rounded-full border-1 border-primary relative overflow-hidden"
+                          style={{
+                            background: `linear-gradient(to right, hsl(var(--primary)) ${progressPercentage}%, hsl(var(--background)) ${progressPercentage}%)`
+                          }}
+                        />
+                      );
+                    }
+                    
+                    return (
+                      <div
+                        key={sessionIndex}
+                        className={cn(
+                          "w-8 h-8 rounded-full border-1 border-primary flex items-center justify-center",
+                          isCompleted ? "bg-primary" : "bg-background"
+                        )}
+                      >
+                        {((isLastCompleted && completedSessions > 0 && completedSessions <= dailySessionsGoal) || 
+                          (isLastCircle && completedSessions > dailySessionsGoal) ||
+                          (sessionIndex === 0 && completedSessions === 0)) && (
+                          <span className={cn(
+                            "text-lg font-light",
+                            completedSessions === 0 ? "text-primary" : "text-background"
+                          )}>
+                            {completedSessions === 0 ? "0" : completedSessions}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+        </div>
       </div>
     </div>
   )

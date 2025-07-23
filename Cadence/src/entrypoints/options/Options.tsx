@@ -1,6 +1,7 @@
 import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
+import { useState, useEffect } from 'react';
 import { Dot, ChartNoAxesColumn, Info, Pencil } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -42,9 +43,11 @@ function Options() {
 
   const [focusTime, setFocusTime] = useState(25 * 60); // 25 minutes in seconds
   const [breakTime, setBreakTime] = useState(5 * 60); // 5 minutes in seconds
+  const [dailySessionsGoal, setDailySessionsGoal] = useState(10); // Default to 10 sessions
 
   const [focusTimeDialogOpen, setFocusTimeDialogOpen] = useState(false);
   const [shortBreakDialogOpen, setShortBreakDialogOpen] = useState(false);
+  const [dailySessionsGoalDialogOpen, setDailySessionsGoalDialogOpen] = useState(false);
 
   const [primaryColor, setPrimaryColor] = useState('');
   const [secondaryColor, setSecondaryColor] = useState('');
@@ -82,6 +85,7 @@ function Options() {
         setBreakAutoStart(settings.breakAutoStart);
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
+        setDailySessionsGoal(settings.dailySessionsGoal || 10);
       }
     });
 
@@ -148,7 +152,7 @@ function Options() {
       if (session.timerState === TimerState.ShortBreak) {
         session.totalTime = breakTime;
       }
-      
+
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setShortBreakDialogOpen(false);
       });
@@ -170,6 +174,15 @@ function Options() {
     browser.storage.local.get(['settings'], (data) => {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.breakAutoStart = checked;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  }
+
+  const handleSaveDailySessionsGoal = (newGoal: number) => {
+    setDailySessionsGoal(newGoal);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.dailySessionsGoal = newGoal;
       browser.storage.local.set({ settings: settings.toJSON() });
     });
   }
@@ -261,6 +274,32 @@ function Options() {
 
                   <div className="flex items-center justify-between max-w-[300px] mt-5">
                     <div className="flex items-center">
+                      <Label className='text-base' htmlFor="dailySessionsGoal">Daily Goal</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Set your target number of focus sessions to complete each day.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <div className="flex items-center text-base cursor-pointer" onClick={() => { setDailySessionsGoalDialogOpen(true) }}>
+                      <div>
+                        {dailySessionsGoal} sessions
+                      </div>
+                      <Pencil className="ml-2 w-4 h-4 text-primary" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className='mt-3 bg-muted p-5 rounded-xl'>
+                  <div className="flex items-center justify-between max-w-[300px]">
+                    <div className="flex items-center">
                       <Label className='text-base' htmlFor="focusAutoStart">Auto-start Focus Sessions</Label>
                       <TooltipProvider>
                         <Tooltip delayDuration={0}>
@@ -306,9 +345,8 @@ function Options() {
                       onCheckedChange={handleToggleBreakAutoStart}
                     />
                   </div>
+
                 </div>
-
-
               </div>
             </TabsContent>
           </Tabs>
@@ -452,6 +490,44 @@ function Options() {
 
                 <div className='w-full text-right mb-2'>
                   <Button className="mt-5" onClick={() => { handleSaveBreakTime() }}> Save Break Time </Button>
+                </div>
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
+        <Dialog open={dailySessionsGoalDialogOpen} onOpenChange={() => { setDailySessionsGoalDialogOpen(false) }}>
+          <DialogContent className="bg-background w-[370px]" >
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md '>
+              <DialogTitle>Set Daily Sessions Goal</DialogTitle>
+              <DialogDescription>
+                <div className="mb-5 mt-10 text-center">
+                  <div className="flex items-center justify-center">
+                    <label className="flex items-center">
+                      <Input
+                        className='w-20 no-arrows text-center md:text-base font-medium'
+                        type="number"
+                        style={{ MozAppearance: 'textfield' }}
+                        value={dailySessionsGoal}
+                        onChange={(e) => {
+                          const newGoal = Math.max(1, Math.min(Number(e.target.value), 99));
+                          setDailySessionsGoal(newGoal);
+                        }}
+                        min={1}
+                        max={99}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </label>
+                    <div className='mb-1 ml-2 text-lg'>sessions per day</div>
+                  </div>
+                </div>
+
+                <div className='w-full text-right mb-2'>
+                  <Button className="mt-5" onClick={() => {
+                    handleSaveDailySessionsGoal(dailySessionsGoal);
+                    setDailySessionsGoalDialogOpen(false);
+                  }}> Save Goal </Button>
                 </div>
               </DialogDescription>
             </div>
