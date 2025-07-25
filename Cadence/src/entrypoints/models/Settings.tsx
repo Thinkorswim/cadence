@@ -1,3 +1,5 @@
+import { ChartType } from './ChartType';
+
 export class Settings {
   constructor(
     public focusTime: number = 25 * 60, // Default to 25 minutes in seconds
@@ -7,7 +9,8 @@ export class Settings {
     public longBreakEnabled: boolean = true, // TODO: Default to long breaks enabled
     public breakAutoStart: boolean = true, // Default to auto-start breaks
     public focusAutoStart: boolean = false, // Default to not auto-start focus
-    public dailySessionsGoal: number = 10 // Default to 10 sessions per day
+    public dailySessionsGoal: number = 10, // Default to 10 sessions per day
+    public preferredChartType: ChartType = ChartType.Sessions // Default to sessions chart
   ) {}
 
   toJSON(): { 
@@ -19,6 +22,7 @@ export class Settings {
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
     dailySessionsGoal: number;
+    preferredChartType: ChartType;
    } {
     return {
         focusTime: this.focusTime,
@@ -29,6 +33,7 @@ export class Settings {
         breakAutoStart: this.breakAutoStart,
         focusAutoStart: this.focusAutoStart,
         dailySessionsGoal: this.dailySessionsGoal,
+        preferredChartType: this.preferredChartType,
     };
   }
 
@@ -41,6 +46,7 @@ export class Settings {
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
     dailySessionsGoal?: number;
+    preferredChartType?: ChartType;
    }): Settings {
     return new Settings(
         json.focusTime,
@@ -50,7 +56,8 @@ export class Settings {
         json.longBreakEnabled,
         json.breakAutoStart,
         json.focusAutoStart,
-        json.dailySessionsGoal ?? 10 // Default to 10 if goal not provided
+        json.dailySessionsGoal ?? 10, // Default to 10 if goal not provided
+        json.preferredChartType ?? ChartType.Sessions // Default to sessions if not provided
     );
   }
 }

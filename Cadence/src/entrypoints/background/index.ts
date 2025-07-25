@@ -1,5 +1,6 @@
 import { Timer } from "lucide-react";
 import { TimerState } from "../models/TimerState";
+import { ChartType } from "../models/ChartType";
 import { timeDisplayFormatBadge } from "@/lib/utils";
 import { DailyStats } from "../models/DailyStats";
 import { CompletedSession } from "../models/CompletedSession";
@@ -28,10 +29,21 @@ export default defineBackground(() => {
 
                 browser.storage.local.set({ settings: defaultSettings.toJSON() });
             } else {
-                // Backward compatibility for dailySessionsGoal
+                // Backward compatibility for dailySessionsGoal and preferredChartType
+                let needsUpdate = false;
+                const updatedSettings: Settings = Settings.fromJSON(data.settings);
+                
                 if (data.settings.dailySessionsGoal === undefined) {
-                    const updatedSettings: Settings = Settings.fromJSON(data.settings);
                     updatedSettings.dailySessionsGoal = 10;
+                    needsUpdate = true;
+                }
+                
+                if (data.settings.preferredChartType === undefined) {
+                    updatedSettings.preferredChartType = ChartType.Sessions;
+                    needsUpdate = true;
+                }
+                
+                if (needsUpdate) {
                     browser.storage.local.set({ settings: updatedSettings.toJSON() });
                 }
             }

@@ -11,12 +11,13 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
-import { SessionsPerDayChart } from './SessionsPerDayChart';
+import { StatisticsChart } from './StatisticsChart';
 import { Settings } from '../models/Settings';
 import { Session } from '../models/Session';
 import { TimerState } from '../models/TimerState';
 import { DailyStats } from '../models/DailyStats';
 import { HistoricalStats } from '../models/HistoricalStats';
+import { ChartType } from '../models/ChartType';
 
 function Options() {
 
@@ -54,6 +55,7 @@ function Options() {
 
   const [activeTab, setActiveTab] = useState<string>('settings');
   const [historicalStats, setHistoricalStats] = useState<HistoricalStats>(new HistoricalStats());
+  const [chartType, setChartType] = useState<ChartType>(ChartType.Sessions);
 
   const [focusTimeCircle, setFocusTimeCircle] = useState<ISettingsPointer[]>([
     {
@@ -86,6 +88,7 @@ function Options() {
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
         setDailySessionsGoal(settings.dailySessionsGoal || 10);
+        setChartType(settings.preferredChartType || ChartType.Sessions);
       }
     });
 
@@ -210,7 +213,10 @@ function Options() {
                   Statistics
                 </div>
                 <div className='mt-6 bg-muted p-5 rounded-xl'>
-                  <SessionsPerDayChart historicalStats={historicalStats} />
+                  <StatisticsChart 
+                    historicalStats={historicalStats} 
+                    chartType={chartType}
+                  />
                 </div>
               </div>
             </TabsContent>
