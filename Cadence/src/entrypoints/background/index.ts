@@ -24,12 +24,14 @@ export default defineBackground(() => {
                     longBreakEnabled: true, // Default to long breaks enabled
                     breakAutoStart: true, // Default to auto-start breaks
                     focusAutoStart: false, // Default to not auto-start focus
-                    dailySessionsGoal: 10 // Default to 10 sessions per day
+                    dailySessionsGoal: 10, // Default to 10 sessions per day
+                    projects: ['General'], // Default to General project
+                    selectedProject: 'General' // Default to General project
                 });
 
                 browser.storage.local.set({ settings: defaultSettings.toJSON() });
             } else {
-                // Backward compatibility for dailySessionsGoal and preferredChartType
+                // Backward compatibility for dailySessionsGoal, preferredChartType, and projects
                 let needsUpdate = false;
                 const updatedSettings: Settings = Settings.fromJSON(data.settings);
                 
@@ -40,6 +42,16 @@ export default defineBackground(() => {
                 
                 if (data.settings.preferredChartType === undefined) {
                     updatedSettings.preferredChartType = ChartType.Sessions;
+                    needsUpdate = true;
+                }
+                
+                if (data.settings.projects === undefined) {
+                    updatedSettings.projects = ['General'];
+                    needsUpdate = true;
+                }
+
+                if (data.settings.selectedProject === undefined) {
+                    updatedSettings.selectedProject = 'General';
                     needsUpdate = true;
                 }
                 
@@ -63,13 +75,15 @@ export default defineBackground(() => {
             }
 
             if (!data.session) {
+                const settings = data.settings ? Settings.fromJSON(data.settings) : null;
                 const defaultSession: Session = Session.fromJSON({
                     elapsedTime: 0,
                     timerState: TimerState.Focus,
-                    totalTime: data.settings ? data.settings.focusTime : 25 * 60, // Default to 25 minutes in seconds
+                    totalTime: settings ? settings.focusTime : 25 * 60, // Default to 25 minutes in seconds
                     isStopped: true,
                     isPaused: false,
                     timeStarted: new Date().toISOString(),
+                    project: settings ? settings.selectedProject : "General"
                 });
 
                 browser.storage.local.set({ session: defaultSession.toJSON() });
@@ -120,7 +134,8 @@ export default defineBackground(() => {
                         const completedSession = CompletedSession.fromJSON({
                             totalTime: session.totalTime,
                             timeStarted: session.timeStarted.toISOString(),
-                            timeEnded: new Date().toISOString()
+                            timeEnded: new Date().toISOString(),
+                            project: session.project || "General"
                         });
 
                         if (dailyStats.date !== new Date().toLocaleDateString('en-CA').slice(0, 10)) {
@@ -211,8 +226,8 @@ export default defineBackground(() => {
     };
 
     browser.runtime.onMessage.addListener(
-        (request: { action: string, params?: any }, _sender, _sendResponse) => {
-            const validActions = ["startTimer", "pauseTimer", "resumeTimer", "stopTimer", "startShortBreak", "skipBreak"];
+        (request: { action: string, project?: string, params?: any }, _sender, _sendResponse) => {
+            const validActions = ["startTimer", "pauseTimer", "resumeTimer", "stopTimer", "startShortBreak", "skipBreak", "updateSessionProject"];
             if (validActions.includes(request.action)) {
                 browser.storage.local.get(["session", "settings"], (data) => {
                     let session: Session = Session.fromJSON(data.session);
@@ -269,6 +284,11 @@ export default defineBackground(() => {
                             if (timer) {
                                 clearInterval(timer);
                                 timer = null;
+                            }
+                            break;
+                        case "updateSessionProject":
+                            if (request.project) {
+                                session.project = request.project;
                             }
                             break;
                     }

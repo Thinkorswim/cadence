@@ -18,7 +18,7 @@ import {
     ChartTooltipContent,
 } from "@/components/ui/chart"
 import { Button } from "@/components/ui/button"
-import { convertSecondsToHoursMinutesSeconds } from "@/lib/utils"
+import { convertSecondsToHoursMinutesSeconds, generateColorFromString } from "@/lib/utils"
 import {
     Popover,
     PopoverContent,
@@ -109,13 +109,30 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
             return date.toLocaleDateString('en-CA').slice(0, 10)
         }).reverse()
 
-        const metricKey = showTimeSpent ? "Time" : "Sessions";
-        const chartConfig = {
-            [metricKey]: {
-                label: showTimeSpent ? "Time Spent" : "Sessions",
-                color: "hsl(var(--secondary))",
+        // Collect all unique projects from the data
+        const allProjects = new Set<string>();
+        
+        // Always include "General" as a fallback for empty weeks
+        allProjects.add("General");
+        
+        last7Days.forEach(date => {
+            if (historicalStats?.stats?.[date]) {
+                const sessions = Array.isArray(historicalStats.stats[date]) ? historicalStats.stats[date] : [];
+                sessions.forEach(session => {
+                    const project = session.project || "General";
+                    allProjects.add(project);
+                });
             }
-        }
+        });
+
+        // Create chart config with all projects
+        const chartConfig: ChartConfig = {};
+        Array.from(allProjects).forEach(project => {
+            chartConfig[project] = {
+                label: project,
+                color: generateColorFromString(project),
+            };
+        });
 
         let chartData: any = [];
         let encounteredMonday = false;
@@ -132,25 +149,52 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                     : new Date(date).toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' })
             };
 
+            // Initialize all projects with 0
+            Array.from(allProjects).forEach(project => {
+                data[project] = 0;
+                if (showTimeSpent) {
+                    data[`${project}Display`] = formatTimeSpent(0);
+                }
+            });
+
+            // Calculate totals for labels
+            let totalSessions = 0;
+            let totalTime = 0;
+
+            if (historicalStats && historicalStats.stats && historicalStats.stats[date]) {
+                const sessions = Array.isArray(historicalStats.stats[date]) ? historicalStats.stats[date] : [];
+                
+                // Group sessions by project
+                const projectData: Record<string, { sessions: number; time: number }> = {};
+                sessions.forEach(session => {
+                    const project = session.project || "General";
+                    if (!projectData[project]) {
+                        projectData[project] = { sessions: 0, time: 0 };
+                    }
+                    projectData[project].sessions += 1;
+                    projectData[project].time += session.totalTime || 0;
+                    
+                    // Add to totals
+                    totalSessions += 1;
+                    totalTime += session.totalTime || 0;
+                });
+
+                // Populate data for each project
+                Object.entries(projectData).forEach(([project, stats]) => {
+                    if (showTimeSpent) {
+                        data[project] = stats.time;
+                        data[`${project}Display`] = formatTimeSpent(stats.time);
+                    } else {
+                        data[project] = stats.sessions;
+                    }
+                });
+            }
+
+            // Add total for display
             if (showTimeSpent) {
-                // Calculate total time spent in seconds
-                let totalSeconds = 0;
-                if (historicalStats && historicalStats.stats && historicalStats.stats[date]) {
-                    const sessions = Array.isArray(historicalStats.stats[date]) ? historicalStats.stats[date] : [];
-                    totalSeconds = sessions.reduce((sum, session) => {
-                        // totalTime is in seconds
-                        return sum + (session.totalTime || 0);
-                    }, 0);
-                }
-                data[metricKey] = totalSeconds;
-                data[`${metricKey}Display`] = formatTimeSpent(totalSeconds);
+                data.totalDisplay = formatTimeSpent(totalTime);
             } else {
-                // Calculate sessions count
-                let sessionsCount = 0;
-                if (historicalStats && historicalStats.stats && historicalStats.stats[date]) {
-                    sessionsCount = Array.isArray(historicalStats.stats[date]) ? historicalStats.stats[date].length : 0;
-                }
-                data[metricKey] = sessionsCount;
+                data.totalDisplay = totalSessions.toString();
             }
 
             return data;
@@ -221,6 +265,20 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                 </div>
             </CardHeader>
             <CardContent>
+                {/* Project Legend */}
+                {Object.keys(chartConfig).length > 0 && (
+                    <div className="flex flex-wrap gap-3 mb-6 px-2">
+                        {Object.entries(chartConfig).map(([project, config]) => (
+                            <div key={project} className="flex items-center gap-2">
+                                <div 
+                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: config.color }}
+                                />
+                                <span className="text-sm text-muted-foreground">{project}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
                 <ChartContainer config={chartConfig}>
                     <BarChart accessibilityLayer data={chartData} margin={{
                         top: 30,
@@ -232,16 +290,51 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                             tickMargin={10}
                             axisLine={false}
                         />
-                        <ChartTooltip content={<ChartTooltipContent 
-                            hideLabel 
-                            hideIndicator 
-                            formatter={(value, name) => {
-                                if (showTimeSpent && name === "Time") {
-                                    return formatTimeSpent(Number(value));
-                                }
-                                return value;
-                            }}
-                        />} />
+                        <ChartTooltip 
+                            content={<ChartTooltipContent 
+                                hideLabel={false}
+                                hideIndicator={false}
+                                labelFormatter={(label) => {
+                                    return (
+                                        <div className="font-semibold text-foreground mb-2">
+                                            {label}
+                                        </div>
+                                    );
+                                }}
+                                formatter={(value, name) => {
+                                    const projectColor = chartConfig[name as string]?.color || "hsl(var(--muted-foreground))";
+                                    
+                                    if (showTimeSpent) {
+                                        const timeValue = formatTimeSpent(Number(value));
+                                        return [
+                                            <div key={name} className="flex items-center gap-2">
+                                                <div 
+                                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: projectColor }}
+                                                />
+                                                <span className="font-medium text-foreground">{name}</span>
+                                                <span className="text-muted-foreground">•</span>
+                                                <span className="font-mono text-sm font-semibold text-foreground">{timeValue}</span>
+                                            </div>
+                                        ];
+                                    } else {
+                                        const sessionText = Number(value) === 1 ? 'session' : 'sessions';
+                                        return [
+                                            <div key={name} className="flex items-center gap-2">
+                                                <div 
+                                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                                    style={{ backgroundColor: projectColor }}
+                                                />
+                                                <span className="font-medium text-foreground">{name}</span>
+                                                <span className="text-muted-foreground">•</span>
+                                                <span className="font-semibold text-foreground">{value} {sessionText}</span>
+                                            </div>
+                                        ];
+                                    }
+                                }}
+                                className="bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg p-3"
+                            />} 
+                        />
 
                         {Object.entries(chartConfig).map(([key, value], index) => {
                             return (
@@ -251,15 +344,18 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                                     stackId="a"
                                     fill={value.color}
                                     radius={
-                                        [4, 4, 4, 4]
+                                         [0, 0, 0, 0] // No rounding for middle bars
                                     }
                                 >
-                                    {index === Object.keys(chartConfig).length - 1 && <LabelList
-                                        position="top"
-                                        offset={12}
-                                        className="fill-muted-foreground font-geistmono text-sm "
-                                        dataKey={showTimeSpent ? `${key}Display` : key}
-                                    />}
+                                    {/* Show total label only on the last (top) bar */}
+                                    {index === Object.keys(chartConfig).length - 1 && (
+                                        <LabelList
+                                            position="top"
+                                            offset={12}
+                                            className="fill-muted-foreground font-geistmono text-sm"
+                                            dataKey="totalDisplay"
+                                        />
+                                    )}
                                 </Bar>
                             )
                         })}

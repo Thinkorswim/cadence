@@ -12,7 +12,7 @@ function Popover({
 function PopoverTrigger({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Trigger>) {
-  return <PopoverPrimitive.Trigger className="bg-muted hover:bg-secondary border-0" data-slot="popover-trigger" {...props} />
+  return <PopoverPrimitive.Trigger className="bg-muted hover:bg-secondary/30 border-0" data-slot="popover-trigger" {...props} />
 }
 
 function PopoverContent({

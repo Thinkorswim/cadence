@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './style.css';
 import '~/assets/global.css';
-import { Cog, ChartNoAxesColumn, Play, Pause, StopCircle, Square, FastForward } from 'lucide-react'
+import { Cog, ChartNoAxesColumn, Play, Pause, StopCircle, Square, FastForward, ChevronsUpDown, Check, Plus } from 'lucide-react'
 import {
   Label,
   PolarGrid,
@@ -10,8 +10,22 @@ import {
   RadialBarChart,
 } from "recharts"
 import { ChartConfig, ChartContainer } from "@/components/ui/chart"
-import { cn, timeDisplayFormatBadge } from "@/lib/utils"
+import { cn, timeDisplayFormatBadge, generateColorFromString } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Session } from '../models/Session';
 import { TimerState } from '../models/TimerState';
 import { Settings } from '../models/Settings';
@@ -43,9 +57,32 @@ function Popup() {
   const [dailySessionsGoal, setDailySessionsGoal] = useState(10)
   const [completedSessions, setCompletedSessions] = useState(0)
 
+  // Project selector state
+  const [open, setOpen] = useState(false)
+  const [selectedProject, setSelectedProject] = useState("General")
+  const [projects, setProjects] = useState([
+    { value: "General", label: "General" }
+  ])
+
   const openStatisticsPage = () => {
     const url = browser.runtime.getURL('/options.html?section=statistics');
     browser.tabs.create({ url });
+  }
+
+  const updateSessionProject = (project: string) => {
+    setSelectedProject(project);
+    if (browser && browser.runtime && browser.runtime.sendMessage) {
+      browser.runtime.sendMessage({ action: "updateSessionProject", project });
+    }
+    
+    // Also update the selected project in settings for persistence
+    browser.storage.local.get(["settings"], (data) => {
+      if (data.settings) {
+        const settings = Settings.fromJSON(data.settings);
+        settings.selectedProject = project;
+        browser.storage.local.set({ settings: settings.toJSON() });
+      }
+    });
   }
 
   useEffect(() => {
@@ -56,11 +93,24 @@ function Popup() {
         setTimerTime(sessionData.totalTime - sessionData.elapsedTime);
         setStartAngle(90);
         setEndAngle(90 + (360 * (sessionData.totalTime - sessionData.elapsedTime)) / sessionData.totalTime);
+        setSelectedProject(sessionData.project || "General");
       }
       
       if (data.settings) {
         const settings: Settings = Settings.fromJSON(data.settings);
         setDailySessionsGoal(settings.dailySessionsGoal || 10);
+        
+        // Convert settings projects array to the format expected by the combobox
+        const projectOptions = settings.projects.map(project => ({
+          value: project,
+          label: project
+        }));
+        setProjects(projectOptions);
+        
+        // Set selected project from settings if no session project is set
+        if (!data.session?.project) {
+          setSelectedProject(settings.selectedProject || "General");
+        }
       }
       
       if (data.dailyStats) {
@@ -78,6 +128,7 @@ function Popup() {
         setTimerTime(message.session.totalTime - message.session.elapsedTime);
         setStartAngle(90);
         setEndAngle(90 + (360 * (message.session.totalTime - message.session.elapsedTime)) / message.session.totalTime);
+        setSelectedProject(message.session.project || "General");
         
         // Update completed sessions count when session updates
         browser.storage.local.get(["dailyStats"], (data) => {
@@ -114,6 +165,89 @@ function Popup() {
           <ChartNoAxesColumn className='w-5 h-5 text-primary cursor-pointer mr-2' onClick={openStatisticsPage} />
           <Cog className='w-5 h-5 text-primary cursor-pointer' onClick={() => browser.runtime.openOptionsPage()} />
         </div>
+      </div>
+
+      {/* Project Selector */}
+      <div className="flex justify-center my-4">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="w-[250px] justify-between min-h-[40px] h-auto"
+            >
+              {selectedProject ? (
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div 
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: generateColorFromString(selectedProject) }}
+                  />
+                  <span className="text-left truncate">
+                    {projects.find((project) => project.value === selectedProject)?.label}
+                  </span>
+                </div>
+              ) : (
+                "Select project..."
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[250px] p-0">
+            <Command className='bg-muted'>
+              {projects.length > 5 && (
+                <CommandInput placeholder="Search project..." />
+              )}
+              <CommandList>
+                <CommandEmpty>No project found.</CommandEmpty>
+                <ScrollArea  viewportClassName="max-h-[170px]">
+                  <CommandGroup>
+                    {projects.map((project) => (
+                      <CommandItem
+                        key={project.value}
+                        value={project.value}
+                        onSelect={(currentValue) => {
+                          // Only update if selecting a different project (prevent deselection)
+                          if (currentValue !== selectedProject) {
+                            updateSessionProject(currentValue);
+                          }
+                          setOpen(false);
+                        }}
+                        className="flex items-start gap-2 min-h-[36px] py-2"
+                      >
+                        <Check
+                          className={cn(
+                            "h-4 w-4 flex-shrink-0 mt-0.5",
+                            selectedProject === project.value ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0 mt-0.5"
+                          style={{ backgroundColor: generateColorFromString(project.value) }}
+                        />
+                        <span className="break-words leading-tight">{project.label}</span>
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </ScrollArea>
+                
+                {/* Add Project Button */}
+                <div className="border-t border-border p-1 ">
+                  <Button
+                    onClick={() => {
+                      browser.runtime.openOptionsPage();
+                      setOpen(false);
+                    }}
+                    className="w-full justify-start h-9 px-2 py-1.5 text-sm font-normal bg-muted hover:bg-secondary/10 text-foreground shadow-none"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add New Project
+                  </Button>
+                </div>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
 

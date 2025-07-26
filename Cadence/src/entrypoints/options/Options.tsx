@@ -18,6 +18,8 @@ import { TimerState } from '../models/TimerState';
 import { DailyStats } from '../models/DailyStats';
 import { HistoricalStats } from '../models/HistoricalStats';
 import { ChartType } from '../models/ChartType';
+import { ProjectsTable } from './ProjectsTable';
+import { ProjectUtils } from '@/lib/ProjectUtils';
 
 function Options() {
 
@@ -56,6 +58,11 @@ function Options() {
   const [activeTab, setActiveTab] = useState<string>('settings');
   const [historicalStats, setHistoricalStats] = useState<HistoricalStats>(new HistoricalStats());
   const [chartType, setChartType] = useState<ChartType>(ChartType.Sessions);
+  const [projects, setProjects] = useState<string[]>(['General']);
+  const [selectedProject, setSelectedProject] = useState<string>('General');
+  const [addProjectDialogOpen, setAddProjectDialogOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState('');
+  const [projectError, setProjectError] = useState('');
 
   const [focusTimeCircle, setFocusTimeCircle] = useState<ISettingsPointer[]>([
     {
@@ -89,6 +96,8 @@ function Options() {
         setBreakTime(settings.shortBreakTime);
         setDailySessionsGoal(settings.dailySessionsGoal || 10);
         setChartType(settings.preferredChartType || ChartType.Sessions);
+        setProjects(settings.projects || ['General']);
+        setSelectedProject(settings.selectedProject || 'General');
       }
     });
 
@@ -190,6 +199,51 @@ function Options() {
     });
   }
 
+  const addProject = () => {
+    setAddProjectDialogOpen(true);
+  };
+
+  const handleAddProject = () => {
+    const trimmedName = newProjectName.trim();
+    
+    if (!trimmedName) {
+      setProjectError('Project name cannot be empty');
+      return;
+    }
+    
+    if (projects.includes(trimmedName)) {
+      setProjectError('A project with this name already exists');
+      return;
+    }
+
+    const updatedProjects = ProjectUtils.addProject(projects, trimmedName);
+    setProjects(updatedProjects);
+    
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.projects = updatedProjects;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+    
+    setNewProjectName('');
+    setProjectError('');
+    setAddProjectDialogOpen(false);
+  };
+
+  const deleteProject = (projectDetails: { name: string }) => {
+    const result = ProjectUtils.removeProject(projects, selectedProject, projectDetails.name);
+    
+    setProjects(result.projects);
+    setSelectedProject(result.selectedProject);
+    
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.projects = result.projects;
+      settings.selectedProject = result.selectedProject;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  };
+
 
 
   return (
@@ -213,8 +267,8 @@ function Options() {
                   Statistics
                 </div>
                 <div className='mt-6 bg-muted p-5 rounded-xl'>
-                  <StatisticsChart 
-                    historicalStats={historicalStats} 
+                  <StatisticsChart
+                    historicalStats={historicalStats}
                     chartType={chartType}
                   />
                 </div>
@@ -351,7 +405,15 @@ function Options() {
                       onCheckedChange={handleToggleBreakAutoStart}
                     />
                   </div>
+                </div>
 
+                <div className='mt-3 bg-muted p-5 rounded-xl'>
+                  <ProjectsTable
+                    projects={projects.map(name => ({ name }))}
+                    selectedProject={selectedProject}
+                    addProject={addProject}
+                    deleteProject={deleteProject}
+                  />
                 </div>
               </div>
             </TabsContent>
@@ -534,6 +596,54 @@ function Options() {
                     handleSaveDailySessionsGoal(dailySessionsGoal);
                     setDailySessionsGoalDialogOpen(false);
                   }}> Save Goal </Button>
+                </div>
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
+        <Dialog open={addProjectDialogOpen} onOpenChange={() => { 
+          setAddProjectDialogOpen(false);
+          setNewProjectName('');
+          setProjectError('');
+        }}>
+          <DialogContent className="bg-background w-[370px]" >
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md '>
+              <DialogTitle>Add New Project</DialogTitle>
+              <DialogDescription>
+                <div className="mb-3 mt-6">
+                  <Input
+                    id="projectName"
+                    className='mt-2'
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => {
+                      setNewProjectName(e.target.value);
+                      if (projectError) setProjectError(''); // Clear error when typing
+                    }}
+                    placeholder="Enter project name..."
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddProject();
+                      }
+                    }}
+                    onFocus={(e) => e.target.select()}
+                    autoFocus
+                  />
+                  {projectError && (
+                    <div className="text-sm text-red-500 mt-2">{projectError}</div>
+                  )}
+                </div>
+
+                <div className='w-full text-right mb-2'>
+                  <Button 
+                    className="mt-5" 
+                    onClick={handleAddProject}
+                    disabled={!newProjectName.trim()}
+                  > 
+                    Add Project 
+                  </Button>
                 </div>
               </DialogDescription>
             </div>

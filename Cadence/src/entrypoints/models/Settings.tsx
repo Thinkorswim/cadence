@@ -10,7 +10,9 @@ export class Settings {
     public breakAutoStart: boolean = true, // Default to auto-start breaks
     public focusAutoStart: boolean = false, // Default to not auto-start focus
     public dailySessionsGoal: number = 10, // Default to 10 sessions per day
-    public preferredChartType: ChartType = ChartType.Sessions // Default to sessions chart
+    public preferredChartType: ChartType = ChartType.Sessions, // Default to sessions chart
+    public projects: string[] = ['General'], // Default to General project
+    public selectedProject: string = 'General' // Default to General project
   ) {}
 
   toJSON(): { 
@@ -23,6 +25,8 @@ export class Settings {
     focusAutoStart: boolean;
     dailySessionsGoal: number;
     preferredChartType: ChartType;
+    projects: string[];
+    selectedProject: string;
    } {
     return {
         focusTime: this.focusTime,
@@ -34,6 +38,8 @@ export class Settings {
         focusAutoStart: this.focusAutoStart,
         dailySessionsGoal: this.dailySessionsGoal,
         preferredChartType: this.preferredChartType,
+        projects: this.projects,
+        selectedProject: this.selectedProject,
     };
   }
 
@@ -47,7 +53,11 @@ export class Settings {
     focusAutoStart: boolean;
     dailySessionsGoal?: number;
     preferredChartType?: ChartType;
+    projects?: string[];
+    selectedProject?: string;
    }): Settings {
+    const projects = json.projects ?? ['General'];
+    
     return new Settings(
         json.focusTime,
         json.shortBreakTime,
@@ -57,7 +67,9 @@ export class Settings {
         json.breakAutoStart,
         json.focusAutoStart,
         json.dailySessionsGoal ?? 10, // Default to 10 if goal not provided
-        json.preferredChartType ?? ChartType.Sessions // Default to sessions if not provided
+        json.preferredChartType ?? ChartType.Sessions, // Default to sessions if not provided
+        projects,
+        json.selectedProject ?? (projects.length > 0 ? projects[0] : 'General') // Default to first project or General
     );
   }
 }

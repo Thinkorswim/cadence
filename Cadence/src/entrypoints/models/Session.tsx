@@ -7,7 +7,8 @@ export class Session {
     public timeStarted: Date = new Date(), // Start time of the session
     public timerState: TimerState = TimerState.Focus, // Current state of the timer
     public isPaused: boolean = false, // Indicates if the session is paused
-    public isStopped: boolean = true // Indicates if the session is stopped
+    public isStopped: boolean = true, // Indicates if the session is stopped
+    public project: string = "General" // Project name for this session
   ) { }
 
   toJSON(): {
@@ -17,6 +18,7 @@ export class Session {
     timerState: TimerState;
     isPaused: boolean;
     isStopped: boolean;
+    project: string;
   } {
     return {
       elapsedTime: this.elapsedTime,
@@ -25,6 +27,7 @@ export class Session {
       timerState: this.timerState,
       isPaused: this.isPaused,
       isStopped: this.isStopped,
+      project: this.project,
     };
   }
 
@@ -35,6 +38,7 @@ export class Session {
     timeStarted: string;
     isPaused: boolean;
     isStopped?: boolean;
+    project?: string;
   }): Session {
     return new Session(
       json.elapsedTime,
@@ -42,7 +46,8 @@ export class Session {
       new Date(json.timeStarted),
       json.timerState,
       json.isPaused,
-      json.isStopped ?? false
+      json.isStopped ?? false,
+      json.project ?? "General"
     );
   }
 }
