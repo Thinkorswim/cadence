@@ -1,8 +1,8 @@
 import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
-import { useState, useEffect } from 'react';
-import { Dot, ChartNoAxesColumn, Info, Pencil } from 'lucide-react'
+import { useState, useEffect, useCallback } from 'react';
+import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
@@ -11,15 +11,32 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatisticsChart } from './StatisticsChart';
 import { Settings } from '../models/Settings';
 import { Session } from '../models/Session';
+import { CompletedSession } from '../models/CompletedSession';
 import { TimerState } from '../models/TimerState';
 import { DailyStats } from '../models/DailyStats';
 import { HistoricalStats } from '../models/HistoricalStats';
 import { ChartType } from '../models/ChartType';
 import { ProjectsTable } from './ProjectsTable';
+import { SessionsTable } from './SessionsTable';
 import { ProjectUtils } from '@/lib/ProjectUtils';
+import { cn, generateColorFromString } from '@/lib/utils';
 
 function Options() {
 
@@ -68,6 +85,44 @@ function Options() {
   const [addProjectDialogOpen, setAddProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [projectError, setProjectError] = useState('');
+  
+  // Sessions management state
+  const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
+  const [addSessionDialogOpen, setAddSessionDialogOpen] = useState(false);
+  const [selectedSessionDate, setSelectedSessionDate] = useState<string>('');
+  const [selectedSessionIndex, setSelectedSessionIndex] = useState<number>(-1);
+  const [editingSession, setEditingSession] = useState<CompletedSession | null>(null);
+  const [sessionDuration, setSessionDuration] = useState(25 * 60); // Duration in seconds
+  const [sessionDurationCircle, setSessionDurationCircle] = useState<ISettingsPointer[]>([
+    {
+      value: 25,
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }
+  ]);
+  
+  // Input field values for datetime-local inputs (separate from editingSession)
+  const [startTimeInput, setStartTimeInput] = useState<string>('');
+  const [endTimeInput, setEndTimeInput] = useState<string>('');
+  
+  // Project selector state for dialog
+  const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
+
+  // Helper function to safely convert Date to datetime-local string
+  const toDateTimeLocalString = (date: Date): string => {
+    try {
+      if (!date || isNaN(date.getTime())) {
+        return '';
+      }
+      const offset = date.getTimezoneOffset() * 60000;
+      const localDate = new Date(date.getTime() - offset);
+      return localDate.toISOString().slice(0, 16);
+    } catch (error) {
+      console.warn('Error converting date to datetime-local string:', error);
+      return '';
+    }
+  };
 
   const [focusTimeCircle, setFocusTimeCircle] = useState<ISettingsPointer[]>([
     {
@@ -101,7 +156,7 @@ function Options() {
     selectRandomText();
 
     // Load settings from browser storage
-    browser.storage.local.get(['settings'], (result) => {
+    browser.storage.local.get(['settings', 'sessions'], (result) => {
       if (result.settings) {
         const settings = result.settings;
         setFocusAutoStart(settings.focusAutoStart);
@@ -149,6 +204,16 @@ function Options() {
       bgColorSelected: '#eee',
     }]);
   }, [focusTime]);
+
+  // Update session duration circle when sessionDuration changes
+  useEffect(() => {
+    setSessionDurationCircle([{
+      value: Math.floor(sessionDuration / 60),
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }]);
+  }, [sessionDuration]);
 
 
   // Get the colors from CSS variables
@@ -326,6 +391,117 @@ function Options() {
     });
   };
 
+  // Session management functions
+  const handleDeleteSession = (date: string, sessionIndex: number) => {
+    const updatedStats = { ...historicalStats.stats };
+    if (updatedStats[date]) {
+      updatedStats[date] = updatedStats[date].filter((_, index) => index !== sessionIndex);
+      if (updatedStats[date].length === 0) {
+        delete updatedStats[date];
+      }
+    }
+    
+    const newHistoricalStats = new HistoricalStats(updatedStats);
+    setHistoricalStats(newHistoricalStats);
+    
+    // Save to storage
+    browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+  };
+
+  const handleEditSession = (date: string, sessionIndex: number) => {
+    const sessionsForDate = historicalStats.stats[date];
+    if (sessionsForDate && sessionsForDate[sessionIndex]) {
+      const sessionToEdit = sessionsForDate[sessionIndex];
+      setEditingSession(new CompletedSession(
+        sessionToEdit.totalTime,
+        sessionToEdit.timeStarted,
+        sessionToEdit.timeEnded,
+        sessionToEdit.project
+      ));
+      setSessionDuration(sessionToEdit.totalTime);
+      setStartTimeInput(toDateTimeLocalString(sessionToEdit.timeStarted));
+      setEndTimeInput(toDateTimeLocalString(sessionToEdit.timeEnded));
+      setSelectedSessionDate(date);
+      setSelectedSessionIndex(sessionIndex);
+      setEditSessionDialogOpen(true);
+    }
+  };
+
+  const handleAddSession = () => {
+    const now = new Date();
+    const twentyFiveMinutesAgo = new Date(now.getTime() - 25 * 60 * 1000);
+    
+    const newSession = new CompletedSession(
+      25 * 60, // Default 25 minutes
+      twentyFiveMinutesAgo,
+      now,
+      selectedProject
+    );
+
+    setEditingSession(newSession);
+    setSessionDuration(25 * 60);
+    setStartTimeInput(toDateTimeLocalString(twentyFiveMinutesAgo));
+    setEndTimeInput(toDateTimeLocalString(now));
+    setSelectedSessionDate(''); // Empty indicates new session
+    setSelectedSessionIndex(-1);
+    setAddSessionDialogOpen(true);
+  };
+
+  const handleSaveSession = () => {
+    if (!editingSession) return;
+
+    // Create updated session with current duration
+    const updatedSession = CompletedSession.fromJSON({
+      totalTime: sessionDuration,
+      timeStarted: startTimeInput,
+      timeEnded: endTimeInput,
+      project: editingSession.project
+    })
+
+    const updatedStats = { ...historicalStats.stats };
+    const sessionDate = updatedSession.timeEnded.toLocaleDateString('en-CA').slice(0, 10); // Get YYYY-MM-DD format
+
+    if (selectedSessionDate === '') {
+      // Adding new session
+      if (!updatedStats[sessionDate]) {
+        updatedStats[sessionDate] = [];
+      }
+      updatedStats[sessionDate].push(updatedSession);
+    } else {
+      // Editing existing session
+      if (updatedStats[selectedSessionDate] && selectedSessionIndex >= 0) {
+        // If date changed, move session to new date
+        if (selectedSessionDate !== sessionDate) {
+          // Remove from old date
+          updatedStats[selectedSessionDate] = updatedStats[selectedSessionDate].filter((_, index) => index !== selectedSessionIndex);
+          if (updatedStats[selectedSessionDate].length === 0) {
+            delete updatedStats[selectedSessionDate];
+          }
+          // Add to new date
+          if (!updatedStats[sessionDate]) {
+            updatedStats[sessionDate] = [];
+          }
+          updatedStats[sessionDate].push(updatedSession);
+        } else {
+          // Same date, just update
+          updatedStats[selectedSessionDate][selectedSessionIndex] = updatedSession;
+        }
+      }
+    }
+
+    const newHistoricalStats = new HistoricalStats(updatedStats);
+    setHistoricalStats(newHistoricalStats);
+    browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+
+    setEditSessionDialogOpen(false);
+    setAddSessionDialogOpen(false);
+    setEditingSession(null);
+    setSelectedSessionDate('');
+    setSelectedSessionIndex(-1);
+    setStartTimeInput('');
+    setEndTimeInput('');
+  };
+
 
 
   return (
@@ -338,6 +514,7 @@ function Options() {
 
               <TabsList className='py-5 px-2'>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="statistics" onClick={handleStatisticsLoad}><ChartNoAxesColumn className='w-5 h-5 mr-1' /> Statistics </TabsTrigger>
+                <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="sessions" onClick={handleStatisticsLoad}><Clock className='w-5 h-5 mr-1' /> Sessions </TabsTrigger>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="settings" ><SettingsIcon className='w-5 h-5 mr-1' />  Settings</TabsTrigger>
               </TabsList>
             </div>
@@ -352,6 +529,24 @@ function Options() {
                   <StatisticsChart
                     historicalStats={historicalStats}
                     chartType={chartType}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+
+
+             {/* Sessions TAB */}
+            <TabsContent value="sessions">
+              <div className='mt-10 mb-5'>
+                <div className='text-3xl font-bold w-full text-primary'>
+                  Sessions
+                </div>
+                <div className='mt-6 bg-muted p-5 rounded-xl'>
+                  <SessionsTable
+                    historicalStats={historicalStats}
+                    deleteSession={handleDeleteSession}
+                    editSession={handleEditSession}
+                    addSession={handleAddSession}
                   />
                 </div>
               </div>
@@ -908,6 +1103,207 @@ function Options() {
                     disabled={!newProjectName.trim()}
                   >
                     Add Project
+                  </Button>
+                </div>
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
+        {/* Session Edit/Add Dialogs */}
+        <Dialog open={editSessionDialogOpen || addSessionDialogOpen} onOpenChange={() => {
+          setEditSessionDialogOpen(false);
+          setAddSessionDialogOpen(false);
+          setEditingSession(null);
+          setSelectedSessionDate('');
+          setSelectedSessionIndex(-1);
+          setStartTimeInput('');
+          setEndTimeInput('');
+        }}>
+          <DialogContent className="bg-background w-[400px]">
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md'>
+              <DialogTitle>
+                {selectedSessionDate === '' ? 'Add New Session' : 'Edit Session'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingSession && (
+                  <div className="space-y-4 mt-6">
+                    <div>
+                      <Label htmlFor="sessionProject">Project</Label>
+                      <Popover open={projectSelectorOpen} onOpenChange={setProjectSelectorOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={projectSelectorOpen}
+                            className="w-full mt-2 justify-between"
+                          >
+                            <div className="flex items-center">
+                              <div 
+                                className="w-3 h-3 rounded-full mr-2"
+                                style={{ backgroundColor: generateColorFromString(editingSession.project) }}
+                              />
+                              {editingSession.project}
+                            </div>
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0">
+                          <Command className='bg-muted'>
+                            {projects.length > 5 && (
+                              <CommandInput placeholder="Search projects..." />
+                            )}
+                            <CommandList>
+                              <CommandEmpty>No project found.</CommandEmpty>
+                              <ScrollArea viewportClassName="max-h-[170px]">
+                                <CommandGroup>
+                                  {projects.map((project) => (
+                                    <CommandItem
+                                      key={project}
+                                      value={project}
+                                      onSelect={(currentValue) => {
+                                        setEditingSession(new CompletedSession(
+                                          editingSession.totalTime,
+                                          editingSession.timeStarted,
+                                          editingSession.timeEnded,
+                                          project
+                                        ));
+                                        setProjectSelectorOpen(false);
+                                      }}
+                                      className="flex items-start gap-2 min-h-[36px] py-2"
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "h-4 w-4 flex-shrink-0 mt-0.5",
+                                          editingSession.project === project ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div 
+                                        className="w-3 h-3 rounded-full flex-shrink-0 mt-0.5"
+                                        style={{ backgroundColor: generateColorFromString(project) }}
+                                      />
+                                      <span className="break-words leading-tight">{project}</span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandGroup>
+                              </ScrollArea>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="totalTime">Duration</Label>
+                      <div className="mb-5 mt-6 relative">
+                        <div className='left-[38px] relative'>
+                          <RoundSlider
+                            pointers={sessionDurationCircle}
+                            onChange={(updated) => {
+                              setSessionDuration(updated[0].value as number * 60);
+                            }}
+                            pathStartAngle={270}
+                            pathEndAngle={269.999}
+                            hideText={true}
+                            pathRadius={120}
+                            pathThickness={12}
+                            pathBgColor={secondaryColor}
+                            connectionBgColor={primaryColor}
+                            pointerBgColor={"#f48b85"}
+                            pointerBgColorSelected={"#f48b85"}
+                            min={0}
+                            max={180}
+                          />
+                        </div>
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: "42%",
+                            left: "50%",
+                            transform: "translateX(-50%)",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <div>
+                            <div className="flex items-center">
+                              <label className="flex items-center">
+                                <Input
+                                  className='w-16 no-arrows text-center md:text-base font-medium'
+                                  type="number"
+                                  style={{ MozAppearance: 'textfield' }}
+                                  value={Math.floor(sessionDuration / 60)}
+                                  onChange={(e) => {
+                                    const newDuration = Math.min(Number(e.target.value), 180) * 60;
+                                    setSessionDuration(newDuration);
+                                  }}
+                                  min={0}
+                                  max={180}
+                                  onFocus={(e) => e.target.select()}
+                                />
+                              </label>
+                              <div className='mb-1 ml-2 text-lg'>minutes</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <Label htmlFor="startTime">Start Time</Label>
+                        <Input
+                          id="startTime"
+                          type="datetime-local"
+                          className="mt-2 [&::-webkit-calendar-picker-indicator]:opacity-100 w-[190px]"
+                          value={startTimeInput}
+                          onChange={(e) => {
+                            setStartTimeInput(e.target.value);
+                            // Only update the session if the date is valid
+                            const newStartTime = new Date(e.target.value);
+                            if (!isNaN(newStartTime.getTime()) && editingSession) {
+                              setEditingSession(new CompletedSession(
+                                editingSession.totalTime,
+                                newStartTime,
+                                editingSession.timeEnded,
+                                editingSession.project
+                              ));
+                            }
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="endTime">End Time</Label>
+                        <Input
+                          id="endTime"
+                          type="datetime-local"
+                          className="mt-2 [&::-webkit-calendar-picker-indicator]:opacity-100 w-[190px]"
+                          value={endTimeInput}
+                          onChange={(e) => {
+                            setEndTimeInput(e.target.value);
+                            // Only update the session if the date is valid
+                            const newEndTime = new Date(e.target.value);
+                            if (!isNaN(newEndTime.getTime()) && editingSession) {
+                              setEditingSession(new CompletedSession(
+                                editingSession.totalTime,
+                                editingSession.timeStarted,
+                                newEndTime,
+                                editingSession.project
+                              ));
+                            }
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className='w-full text-right mb-2'>
+                  <Button className="mt-5" onClick={handleSaveSession}>
+                    {selectedSessionDate === '' ? 'Add Session' : 'Save Changes'}
                   </Button>
                 </div>
               </DialogDescription>
