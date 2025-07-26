@@ -16,16 +16,15 @@ export default defineBackground(() => {
         if (offscreenDocumentCreated) return;
         
         try {
-            // Check if offscreen API is available (Chrome/Edge only)
             if (!browser.offscreen) {
-                console.warn('Offscreen API not available in this browser');
+                console.log('Offscreen API not available in this browser');
                 return;
             }
             
             await browser.offscreen.createDocument({
                 url: 'offscreen.html',
                 reasons: ['AUDIO_PLAYBACK'],
-                justification: 'Playing notification sounds for timer completion'
+                justification: 'Playing notification sounds for timer completion.'
             });
             offscreenDocumentCreated = true;
         } catch (error) {
@@ -38,8 +37,6 @@ export default defineBackground(() => {
             if (settings.soundEnabled) {
                 // Check if we're in Firefox or if offscreen API is not available
                 if (import.meta.env.BROWSER === 'firefox' || !browser.offscreen) {
-                    // Firefox fallback: Use Audio Web API directly in background script
-                    // Note: This might not work in all browsers due to autoplay policies
                     try {
                         const audio = new Audio(browser.runtime.getURL('/sounds/alarm.wav'));
                         audio.volume = Math.max(0, Math.min(1, settings.soundVolume));
@@ -87,7 +84,7 @@ export default defineBackground(() => {
 
                 browser.storage.local.set({ settings: defaultSettings.toJSON() });
             } else {
-                // Backward compatibility for dailySessionsGoal, preferredChartType, and projects
+                // Backward compatibility
                 let needsUpdate = false;
                 const updatedSettings: Settings = Settings.fromJSON(data.settings);
                 
@@ -125,12 +122,6 @@ export default defineBackground(() => {
                     updatedSettings.soundVolume = 0.7;
                     needsUpdate = true;
                 }
-
-                // Set longBreakEnabled to false for existing users who had it as true by default
-                if (data.settings.longBreakEnabled === true && data.settings.longBreakTime === 15 * 60 && data.settings.longBreakInterval === 4) {
-                    updatedSettings.longBreakEnabled = false;
-                    needsUpdate = true;
-                }
                 
                 if (needsUpdate) {
                     browser.storage.local.set({ settings: updatedSettings.toJSON() });
@@ -156,7 +147,7 @@ export default defineBackground(() => {
                 const defaultSession: Session = Session.fromJSON({
                     elapsedTime: 0,
                     timerState: TimerState.Focus,
-                    totalTime: settings ? settings.focusTime : 25 * 60, // Default to 25 minutes in seconds
+                    totalTime: settings ? settings.focusTime : 25 * 60,
                     isStopped: true,
                     isPaused: false,
                     timeStarted: new Date().toISOString(),
@@ -208,7 +199,7 @@ export default defineBackground(() => {
                             });
                         }
 
-                        // Play notification sound
+                        // Play notification sound if enabled
                         playNotificationSound(settings);
 
                         const completedSession = CompletedSession.fromJSON({
@@ -287,8 +278,9 @@ export default defineBackground(() => {
                                 });
                             }
 
-                            // Play notification sound
+                            // Play notification sound if enabled
                             playNotificationSound(settings);
+
                             session.timerState = TimerState.Focus;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();
@@ -335,8 +327,9 @@ export default defineBackground(() => {
                                 });
                             }
 
-                            // Play notification sound
+                            // Play notification sound if enabled
                             playNotificationSound(settings);
+
                             session.timerState = TimerState.Focus;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();

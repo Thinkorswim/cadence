@@ -13,9 +13,6 @@ import {
 import { Pencil, Trash2, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 
 type SessionsTableProps = {
     historicalStats: HistoricalStats;
@@ -34,7 +31,6 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
     const [currentPage, setCurrentPage] = useState(0);
     const sessionsPerPage = 15;
     
-    // Confirmation dialog state
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState<{ date: string; index: number } | null>(null);
     

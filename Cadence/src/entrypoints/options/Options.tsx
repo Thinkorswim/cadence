@@ -40,8 +40,7 @@ import { ProjectUtils } from '@/lib/ProjectUtils';
 import { cn, generateColorFromString } from '@/lib/utils';
 
 function Options() {
-
-  // Define the list of texts
+  // Define the list of call to action texts for Discord
   const ctaDiscordTexts: string[] = [
     'Have a question? Join the',
     'Need help? Join the',
@@ -53,7 +52,7 @@ function Options() {
 
   const selectRandomText = () => {
     const randomIndex = Math.floor(Math.random() * ctaDiscordTexts.length);
-    setCtaDiscordTexts(ctaDiscordTexts[randomIndex]);
+    setCtaDiscordText(ctaDiscordTexts[randomIndex]);
   };
 
   const [breakAutoStart, setBreakAutoStart] = useState(false);
@@ -62,15 +61,15 @@ function Options() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
 
-  // State to store the selected text
-  const [ctaDiscordText, setCtaDiscordTexts] = useState<string>('');
+  // State to store the Discord call to action text
+  const [ctaDiscordText, setCtaDiscordText] = useState<string>('');
 
-  const [focusTime, setFocusTime] = useState(25 * 60); // 25 minutes in seconds
-  const [breakTime, setBreakTime] = useState(5 * 60); // 5 minutes in seconds
-  const [longBreakTime, setLongBreakTime] = useState(15 * 60); // 15 minutes in seconds
-  const [longBreakInterval, setLongBreakInterval] = useState(4); // Every 4 sessions
-  const [longBreakEnabled, setLongBreakEnabled] = useState(false); // Disabled by default
-  const [dailySessionsGoal, setDailySessionsGoal] = useState(10); // Default to 10 sessions
+  const [focusTime, setFocusTime] = useState(25 * 60);
+  const [breakTime, setBreakTime] = useState(5 * 60);
+  const [longBreakTime, setLongBreakTime] = useState(15 * 60);
+  const [longBreakInterval, setLongBreakInterval] = useState(4);
+  const [longBreakEnabled, setLongBreakEnabled] = useState(false);
+  const [dailySessionsGoal, setDailySessionsGoal] = useState(10);
 
   const [focusTimeDialogOpen, setFocusTimeDialogOpen] = useState(false);
   const [shortBreakDialogOpen, setShortBreakDialogOpen] = useState(false);
@@ -96,7 +95,7 @@ function Options() {
   const [selectedSessionDate, setSelectedSessionDate] = useState<string>('');
   const [selectedSessionIndex, setSelectedSessionIndex] = useState<number>(-1);
   const [editingSession, setEditingSession] = useState<CompletedSession | null>(null);
-  const [sessionDuration, setSessionDuration] = useState(25 * 60); // Duration in seconds
+  const [sessionDuration, setSessionDuration] = useState(25 * 60); 
   const [sessionDurationCircle, setSessionDurationCircle] = useState<ISettingsPointer[]>([
     {
       value: 25,
@@ -401,7 +400,7 @@ function Options() {
     setProjects(updatedProjects);
 
     browser.storage.local.get(['settings'], (data) => {
-      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      const settings: Settings = Settings.fromJSON(data.settings);
       settings.projects = updatedProjects;
       browser.storage.local.set({ settings: settings.toJSON() });
     });
@@ -418,7 +417,7 @@ function Options() {
     setSelectedProject(result.selectedProject);
 
     browser.storage.local.get(['settings'], (data) => {
-      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      const settings: Settings = Settings.fromJSON(data.settings);
       settings.projects = result.projects;
       settings.selectedProject = result.selectedProject;
       browser.storage.local.set({ settings: settings.toJSON() });
@@ -504,20 +503,16 @@ function Options() {
     } else {
       // Editing existing session
       if (updatedStats[selectedSessionDate] && selectedSessionIndex >= 0) {
-        // If date changed, move session to new date
         if (selectedSessionDate !== sessionDate) {
-          // Remove from old date
           updatedStats[selectedSessionDate] = updatedStats[selectedSessionDate].filter((_, index) => index !== selectedSessionIndex);
           if (updatedStats[selectedSessionDate].length === 0) {
             delete updatedStats[selectedSessionDate];
           }
-          // Add to new date
           if (!updatedStats[sessionDate]) {
             updatedStats[sessionDate] = [];
           }
           updatedStats[sessionDate].push(updatedSession);
         } else {
-          // Same date, just update
           updatedStats[selectedSessionDate][selectedSessionIndex] = updatedSession;
         }
       }
@@ -1192,7 +1187,7 @@ function Options() {
                     value={newProjectName}
                     onChange={(e) => {
                       setNewProjectName(e.target.value);
-                      if (projectError) setProjectError(''); // Clear error when typing
+                      if (projectError) setProjectError('');
                     }}
                     placeholder="Enter project name..."
                     onKeyDown={(e) => {

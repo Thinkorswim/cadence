@@ -57,7 +57,6 @@ function Popup() {
   const [dailySessionsGoal, setDailySessionsGoal] = useState(10)
   const [completedSessions, setCompletedSessions] = useState(0)
 
-  // Project selector state
   const [open, setOpen] = useState(false)
   const [selectedProject, setSelectedProject] = useState("General")
   const [projects, setProjects] = useState([
@@ -75,7 +74,6 @@ function Popup() {
       browser.runtime.sendMessage({ action: "updateSessionProject", project });
     }
     
-    // Also update the selected project in settings for persistence
     browser.storage.local.get(["settings"], (data) => {
       if (data.settings) {
         const settings = Settings.fromJSON(data.settings);
@@ -120,7 +118,7 @@ function Popup() {
     });
   }, []);
 
-  // wait for the background script to send the session data
+  // Wait for the background script to send the session data
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message.action === "updateSession") {
@@ -207,7 +205,6 @@ function Popup() {
                         key={project.value}
                         value={project.value}
                         onSelect={(currentValue) => {
-                          // Only update if selecting a different project (prevent deselection)
                           if (currentValue !== selectedProject) {
                             updateSessionProject(currentValue);
                           }
@@ -471,7 +468,7 @@ function Popup() {
                     if (isCurrentSession) {
                       // Progressive circle fill for current focus session
                       const progress = session ? (session.elapsedTime / session.totalTime) : 0;
-                      const progressPercentage = Math.max(5, Math.min(95, progress * 100)); // 5% to 95% range for visual offset
+                      const progressPercentage = Math.max(5, Math.min(95, progress * 100)); 
                       
                       return (
                         <div

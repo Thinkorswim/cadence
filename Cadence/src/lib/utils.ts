@@ -31,9 +31,8 @@ export const timeDisplayFormatBadge = (time: number) => {
 
 // Function to generate a consistent color from a string using HSL
 export const generateColorFromString = (str: string): string => {
-  // Special case for "General" project - use secondary color from CSS variables
   if (str === 'General') {
-    return 'hsl(3, 84%, 74%)'; // --secondary: 3 84% 74%
+    return 'hsl(3, 84%, 74%)';
   }
   
   // Create a simple hash from the string
@@ -46,8 +45,8 @@ export const generateColorFromString = (str: string): string => {
   const hue = Math.abs(hash) % 360;
   
   // Use pastel-like colors with lower saturation and higher lightness
-  const saturation = 45; // Lower saturation for softer, pastel colors
-  const lightness = 70;  // Higher lightness for a more pastel appearance
+  const saturation = 45; 
+  const lightness = 70;
   
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };

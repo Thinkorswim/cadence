@@ -30,11 +30,6 @@ type ProjectsTableProps = {
 };
 
 export const ProjectsTable: React.FC<ProjectsTableProps> = ({ projects, selectedProject, addProject, deleteProject }) => {
-    // Calculate height based on number of projects (each row is roughly 40px + some padding)
-    const projectCount = projects?.length || 0;
-    // const calculatedHeight = Math.min(220, Math.max(38  , projectCount * 38 - projectCount)); // Min 37px, max 220px
-
-    // State for confirmation dialog
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [projectToDelete, setProjectToDelete] = useState<string | null>(null);
 

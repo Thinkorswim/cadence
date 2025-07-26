@@ -61,12 +61,10 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
 
     const currentOption = showTimeSpent ? "time" : "sessions"
 
-    // Update local state when prop changes
     useEffect(() => {
         setCurrentChartType(chartType);
     }, [chartType]);
 
-    // Save chart preference when it changes
     const handleChartTypeChange = (value: string) => {
         const newChartType = value === "time" ? ChartType.Time : ChartType.Sessions;
         setCurrentChartType(newChartType);
@@ -351,7 +349,7 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                                     stackId="a"
                                     fill={value.color}
                                     radius={
-                                         [0, 0, 0, 0] // No rounding for middle bars
+                                         [0, 0, 0, 0]
                                     }
                                 >
                                     {/* Show total label only on the last (top) bar */}
