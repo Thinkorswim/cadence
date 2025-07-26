@@ -46,10 +46,15 @@ function Options() {
 
   const [focusTime, setFocusTime] = useState(25 * 60); // 25 minutes in seconds
   const [breakTime, setBreakTime] = useState(5 * 60); // 5 minutes in seconds
+  const [longBreakTime, setLongBreakTime] = useState(15 * 60); // 15 minutes in seconds
+  const [longBreakInterval, setLongBreakInterval] = useState(4); // Every 4 sessions
+  const [longBreakEnabled, setLongBreakEnabled] = useState(false); // Disabled by default
   const [dailySessionsGoal, setDailySessionsGoal] = useState(10); // Default to 10 sessions
 
   const [focusTimeDialogOpen, setFocusTimeDialogOpen] = useState(false);
   const [shortBreakDialogOpen, setShortBreakDialogOpen] = useState(false);
+  const [longBreakTimeDialogOpen, setLongBreakTimeDialogOpen] = useState(false);
+  const [longBreakIntervalDialogOpen, setLongBreakIntervalDialogOpen] = useState(false);
   const [dailySessionsGoalDialogOpen, setDailySessionsGoalDialogOpen] = useState(false);
 
   const [primaryColor, setPrimaryColor] = useState('');
@@ -82,6 +87,15 @@ function Options() {
     }
   ]);
 
+  const [longBreakTimeCircle, setLongBreakTimeCircle] = useState<ISettingsPointer[]>([
+    {
+      value: Math.floor(longBreakTime / 60),
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }
+  ]);
+
   useEffect(() => {
     // Select a random text for the CTA Discord
     selectRandomText();
@@ -94,6 +108,9 @@ function Options() {
         setBreakAutoStart(settings.breakAutoStart);
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
+        setLongBreakTime(settings.longBreakTime || 15 * 60);
+        setLongBreakInterval(settings.longBreakInterval || 4);
+        setLongBreakEnabled(settings.longBreakEnabled || false);
         setDailySessionsGoal(settings.dailySessionsGoal || 10);
         setChartType(settings.preferredChartType || ChartType.Sessions);
         setProjects(settings.projects || ['General']);
@@ -102,6 +119,36 @@ function Options() {
     });
 
   }, []);
+
+  // Update break time circle when breakTime changes
+  useEffect(() => {
+    setBreakTimeCircle([{
+      value: Math.floor(breakTime / 60),
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }]);
+  }, [breakTime]);
+
+  // Update long break time circle when longBreakTime changes
+  useEffect(() => {
+    setLongBreakTimeCircle([{
+      value: Math.floor(longBreakTime / 60),
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }]);
+  }, [longBreakTime]);
+
+  // Update focus time circle when focusTime changes
+  useEffect(() => {
+    setFocusTimeCircle([{
+      value: Math.floor(focusTime / 60),
+      radius: 12,
+      bgColor: "#fff",
+      bgColorSelected: '#eee',
+    }]);
+  }, [focusTime]);
 
 
   // Get the colors from CSS variables
@@ -190,6 +237,41 @@ function Options() {
     });
   }
 
+  const handleSaveLongBreakTime = () => {
+    browser.storage.local.get(['settings', 'session'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      const session: Session = Session.fromJSON(data.session) || new Session();
+
+      settings.longBreakTime = longBreakTime;
+      if (session.timerState === TimerState.LongBreak) {
+        session.totalTime = longBreakTime;
+      }
+
+      browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
+        setLongBreakTimeDialogOpen(false);
+      });
+    });
+  };
+
+  const handleSaveLongBreakInterval = () => {
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.longBreakInterval = longBreakInterval;
+      browser.storage.local.set({ settings: settings.toJSON() }, () => {
+        setLongBreakIntervalDialogOpen(false);
+      });
+    });
+  };
+
+  const handleToggleLongBreakEnabled = (checked: boolean) => {
+    setLongBreakEnabled(checked);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.longBreakEnabled = checked;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  };
+
   const handleSaveDailySessionsGoal = (newGoal: number) => {
     setDailySessionsGoal(newGoal);
     browser.storage.local.get(['settings'], (data) => {
@@ -205,12 +287,12 @@ function Options() {
 
   const handleAddProject = () => {
     const trimmedName = newProjectName.trim();
-    
+
     if (!trimmedName) {
       setProjectError('Project name cannot be empty');
       return;
     }
-    
+
     if (projects.includes(trimmedName)) {
       setProjectError('A project with this name already exists');
       return;
@@ -218,13 +300,13 @@ function Options() {
 
     const updatedProjects = ProjectUtils.addProject(projects, trimmedName);
     setProjects(updatedProjects);
-    
+
     browser.storage.local.get(['settings'], (data) => {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.projects = updatedProjects;
       browser.storage.local.set({ settings: settings.toJSON() });
     });
-    
+
     setNewProjectName('');
     setProjectError('');
     setAddProjectDialogOpen(false);
@@ -232,10 +314,10 @@ function Options() {
 
   const deleteProject = (projectDetails: { name: string }) => {
     const result = ProjectUtils.removeProject(projects, selectedProject, projectDetails.name);
-    
+
     setProjects(result.projects);
     setSelectedProject(result.selectedProject);
-    
+
     browser.storage.local.get(['settings'], (data) => {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.projects = result.projects;
@@ -355,6 +437,82 @@ function Options() {
                       <Pencil className="ml-2 w-4 h-4 text-primary" />
                     </div>
                   </div>
+            
+                  <div className="flex items-center justify-between max-w-[300px] mt-5">
+                    <div className="flex items-center">
+                      <Label className='text-base' htmlFor="longBreakEnabled">Long Breaks</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Enable longer breaks after completing several focus sessions.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="longBreakEnabled"
+                      className='data-[state=unchecked]:bg-white'
+                      checked={longBreakEnabled}
+                      onCheckedChange={handleToggleLongBreakEnabled}
+                    />
+                  </div>
+
+                  {longBreakEnabled && (
+                    <>
+                      <div className="flex items-center justify-between max-w-[300px] mt-5">
+                        <div className="flex items-center">
+                          <Label className='text-base' htmlFor="longBreakTime">Long Break Time</Label>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <button className="flex items-center justify-center ml-2 rounded-full">
+                                  <Info className="w-4 h-4 text-secondary" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-secondary text-white p-2 rounded">
+                                The duration of your long break.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <div className="flex items-center text-base cursor-pointer" onClick={() => { setLongBreakTimeDialogOpen(true) }}>
+                          <div>
+                            {longBreakTime / 60} minutes
+                          </div>
+                          <Pencil className="ml-2 w-4 h-4 text-primary" />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between max-w-[300px] mt-5">
+                        <div className="flex items-center">
+                          <Label className='text-base' htmlFor="longBreakInterval">Long Break After</Label>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <button className="flex items-center justify-center ml-2 rounded-full">
+                                  <Info className="w-4 h-4 text-secondary" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-secondary text-white p-2 rounded">
+                                Take a long break after this many completed focus sessions.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <div className="flex items-center text-base cursor-pointer" onClick={() => { setLongBreakIntervalDialogOpen(true) }}>
+                          <div>
+                            {longBreakInterval} sessions
+                          </div>
+                          <Pencil className="ml-2 w-4 h-4 text-primary" />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className='mt-3 bg-muted p-5 rounded-xl'>
@@ -406,6 +564,8 @@ function Options() {
                     />
                   </div>
                 </div>
+
+
 
                 <div className='mt-3 bg-muted p-5 rounded-xl'>
                   <ProjectsTable
@@ -565,6 +725,111 @@ function Options() {
         </Dialog>
 
 
+        <Dialog open={longBreakTimeDialogOpen} onOpenChange={() => { setLongBreakTimeDialogOpen(false) }}>
+          <DialogContent className="bg-background w-[370px]" >
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md '>
+              <DialogTitle>Set Long Break Time</DialogTitle>
+              <DialogDescription>
+                <div className="mb-5 mt-10 relative">
+                  <div className='left-[17px] relative'>
+                    <RoundSlider
+                      pointers={longBreakTimeCircle}
+                      onChange={(updated) => {
+                        setLongBreakTime(updated[0].value as number * 60);
+                      }}
+                      pathStartAngle={270}
+                      pathEndAngle={269.999}
+                      hideText={true}
+                      pathRadius={130}
+                      pathThickness={12}
+                      pathBgColor={secondaryColor}
+                      connectionBgColor={primaryColor}
+                      pointerBgColor={"#f48b85"}
+                      pointerBgColorSelected={"#f48b85"}
+                      min={0}
+                      max={60}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "42%",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <div>
+                      <div className="flex items-center">
+                        <label className="flex items-center">
+                          <Input
+                            className='w-16 no-arrows text-center md:text-base font-medium'
+                            type="number"
+                            style={{ MozAppearance: 'textfield' }}
+                            value={longBreakTime / 60}
+                            onChange={(e) => {
+                              setLongBreakTime(Math.min(Number(e.target.value), 60) * 60);
+                              setLongBreakTimeCircle([{
+                                value: Math.min(Number(e.target.value), 60),
+                              }]);
+                            }}
+                            min={0}
+                            max={60}
+                            onFocus={(e) => e.target.select()}
+                          />
+                        </label>
+                        <div className='mb-1 ml-2 text-lg'>minutes</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className='w-full text-right mb-2'>
+                  <Button className="mt-5" onClick={() => { handleSaveLongBreakTime() }}> Save Long Break Time </Button>
+                </div>
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
+        <Dialog open={longBreakIntervalDialogOpen} onOpenChange={() => { setLongBreakIntervalDialogOpen(false) }}>
+          <DialogContent className="bg-background w-[370px]" >
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md '>
+              <DialogTitle>Set Long Break Interval</DialogTitle>
+              <DialogDescription>
+                <div className="mb-5 mt-10 text-center">
+                  <div className="flex items-center justify-center">
+                    <label className="flex items-center">
+                      <Input
+                        className='w-20 no-arrows text-center md:text-base font-medium'
+                        type="number"
+                        style={{ MozAppearance: 'textfield' }}
+                        value={longBreakInterval}
+                        onChange={(e) => {
+                          setLongBreakInterval(Math.max(1, Math.min(Number(e.target.value), 20)));
+                        }}
+                        min={1}
+                        max={20}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </label>
+                    <div className='mb-1 ml-2 text-lg'>sessions</div>
+                  </div>
+                </div>
+
+                <div className='w-full text-right mb-2'>
+                  <Button className="mt-5" onClick={() => { handleSaveLongBreakInterval() }}> Save Interval </Button>
+                </div>
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+
         <Dialog open={dailySessionsGoalDialogOpen} onOpenChange={() => { setDailySessionsGoalDialogOpen(false) }}>
           <DialogContent className="bg-background w-[370px]" >
             <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md '>
@@ -603,7 +868,7 @@ function Options() {
         </Dialog>
 
 
-        <Dialog open={addProjectDialogOpen} onOpenChange={() => { 
+        <Dialog open={addProjectDialogOpen} onOpenChange={() => {
           setAddProjectDialogOpen(false);
           setNewProjectName('');
           setProjectError('');
@@ -637,12 +902,12 @@ function Options() {
                 </div>
 
                 <div className='w-full text-right mb-2'>
-                  <Button 
-                    className="mt-5" 
+                  <Button
+                    className="mt-5"
                     onClick={handleAddProject}
                     disabled={!newProjectName.trim()}
-                  > 
-                    Add Project 
+                  >
+                    Add Project
                   </Button>
                 </div>
               </DialogDescription>

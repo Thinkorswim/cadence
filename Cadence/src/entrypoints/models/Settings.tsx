@@ -6,7 +6,7 @@ export class Settings {
     public shortBreakTime: number = 5 * 60, // Default to 5 minutes in seconds
     public longBreakTime: number = 15 * 60, // TODO: Default to 15 minutes in seconds
     public longBreakInterval: number = 4, // TODO: Default to every 4 cycles
-    public longBreakEnabled: boolean = true, // TODO: Default to long breaks enabled
+    public longBreakEnabled: boolean = false, // Default to long breaks disabled
     public breakAutoStart: boolean = true, // Default to auto-start breaks
     public focusAutoStart: boolean = false, // Default to not auto-start focus
     public dailySessionsGoal: number = 10, // Default to 10 sessions per day

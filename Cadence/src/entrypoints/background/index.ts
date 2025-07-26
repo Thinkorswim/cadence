@@ -21,7 +21,7 @@ export default defineBackground(() => {
                     shortBreakTime: 5 * 60, // Default to 5 minutes in seconds
                     longBreakTime: 15 * 60, // Default to 15 minutes in seconds
                     longBreakInterval: 4, // Default to every 4 cycles
-                    longBreakEnabled: true, // Default to long breaks enabled
+                    longBreakEnabled: false, // Default to long breaks disabled
                     breakAutoStart: true, // Default to auto-start breaks
                     focusAutoStart: false, // Default to not auto-start focus
                     dailySessionsGoal: 10, // Default to 10 sessions per day
@@ -52,6 +52,12 @@ export default defineBackground(() => {
 
                 if (data.settings.selectedProject === undefined) {
                     updatedSettings.selectedProject = 'General';
+                    needsUpdate = true;
+                }
+
+                // Set longBreakEnabled to false for existing users who had it as true by default
+                if (data.settings.longBreakEnabled === true && data.settings.longBreakTime === 15 * 60 && data.settings.longBreakInterval === 4) {
+                    updatedSettings.longBreakEnabled = false;
                     needsUpdate = true;
                 }
                 
@@ -151,10 +157,21 @@ export default defineBackground(() => {
 
                         dailyStats.completedSessions.push(completedSession);
 
-                        session.timerState = TimerState.ShortBreak;
+                        // Check if we need a long break based on today's completed sessions
+                        const completedSessionsToday = dailyStats.completedSessions.length;
+                        const shouldTakeLongBreak = settings.longBreakEnabled && 
+                            completedSessionsToday % settings.longBreakInterval === 0;
+
+                        if (shouldTakeLongBreak) {
+                            session.timerState = TimerState.LongBreak;
+                            session.totalTime = settings.longBreakTime;
+                        } else {
+                            session.timerState = TimerState.ShortBreak;
+                            session.totalTime = settings.shortBreakTime;
+                        }
+
                         session.elapsedTime = 0;
                         session.timeStarted = new Date();
-                        session.totalTime = settings.shortBreakTime;
 
                         if (settings.breakAutoStart) {
                             session.isStopped = false;
@@ -221,13 +238,59 @@ export default defineBackground(() => {
                     setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
+            } else if (session && session.timerState === TimerState.LongBreak) {
+                session.elapsedTime += 1;
+
+                // Check if the long break has ended
+                if (session.elapsedTime >= session.totalTime) {
+                    clearInterval(timer!);
+                    timer = null;
+
+                    // Show notification for end of long break
+                    if (typeof browser.notifications !== 'undefined') {
+                        browser.notifications.create({
+                            type: 'basic',
+                            iconUrl: browser.runtime.getURL('/icon/256.png'),
+                            title: 'Long Break Ended',
+                            message: 'Time to focus again'
+                        });
+                    }
+
+                    browser.storage.local.get(["settings"], (data) => {
+                        const settings: Settings = Settings.fromJSON(data.settings);
+                        if (settings) {
+                            session.timerState = TimerState.Focus;
+                            session.elapsedTime = 0;
+                            session.timeStarted = new Date();
+                            session.totalTime = settings.focusTime;
+
+                            if (settings.focusAutoStart) {
+                                session.isStopped = false;
+                                timer = setInterval(() => updateTime(), 1000);
+                                setBadge(timeDisplayFormatBadge(session.totalTime), "red");
+                            } else {
+                                session.isStopped = true;
+                                setBadge("", "red");
+                            }
+
+                            browser.storage.local.set({ session: session.toJSON() });
+                            browser.runtime.sendMessage({ action: "updateSession", session });
+                        }
+                    });
+
+                } else {
+                    browser.storage.local.set({ session: session.toJSON() });
+
+                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
+                    browser.runtime.sendMessage({ action: "updateSession", session });
+                }
             }
         });
     };
 
     browser.runtime.onMessage.addListener(
         (request: { action: string, project?: string, params?: any }, _sender, _sendResponse) => {
-            const validActions = ["startTimer", "pauseTimer", "resumeTimer", "stopTimer", "startShortBreak", "skipBreak", "updateSessionProject"];
+            const validActions = ["startTimer", "pauseTimer", "resumeTimer", "stopTimer", "startShortBreak", "startLongBreak", "skipBreak", "updateSessionProject"];
             if (validActions.includes(request.action)) {
                 browser.storage.local.get(["session", "settings"], (data) => {
                     let session: Session = Session.fromJSON(data.session);
@@ -270,6 +333,13 @@ export default defineBackground(() => {
                             session.timerState = TimerState.ShortBreak;
                             session.timeStarted = new Date();
                             session.totalTime = settings.shortBreakTime;
+                            session.isStopped = false;
+                            timer = setInterval(() => updateTime(), 1000);
+                            break;
+                        case "startLongBreak":
+                            session.timerState = TimerState.LongBreak;
+                            session.timeStarted = new Date();
+                            session.totalTime = settings.longBreakTime;
                             session.isStopped = false;
                             timer = setInterval(() => updateTime(), 1000);
                             break;
