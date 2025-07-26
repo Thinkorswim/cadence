@@ -291,49 +291,56 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                             axisLine={false}
                         />
                         <ChartTooltip 
-                            content={<ChartTooltipContent 
-                                hideLabel={false}
-                                hideIndicator={false}
-                                labelFormatter={(label) => {
-                                    return (
+                            content={({ active, payload, label }) => {
+                                if (!active || !payload || !payload.length) {
+                                    return null;
+                                }
+
+                                // Sort payload in reverse order to match chart stacking
+                                const sortedPayload = [...payload].reverse();
+
+                                return (
+                                    <div className="bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg p-3">
                                         <div className="font-semibold text-foreground mb-2">
                                             {label}
                                         </div>
-                                    );
-                                }}
-                                formatter={(value, name) => {
-                                    const projectColor = chartConfig[name as string]?.color || "hsl(var(--muted-foreground))";
-                                    
-                                    if (showTimeSpent) {
-                                        const timeValue = formatTimeSpent(Number(value));
-                                        return [
-                                            <div key={name} className="flex items-center gap-2">
-                                                <div 
-                                                    className="w-3 h-3 rounded-full flex-shrink-0"
-                                                    style={{ backgroundColor: projectColor }}
-                                                />
-                                                <span className="font-medium text-foreground">{name}</span>
-                                                <span className="text-muted-foreground">•</span>
-                                                <span className="font-mono text-sm font-semibold text-foreground">{timeValue}</span>
-                                            </div>
-                                        ];
-                                    } else {
-                                        const sessionText = Number(value) === 1 ? 'session' : 'sessions';
-                                        return [
-                                            <div key={name} className="flex items-center gap-2">
-                                                <div 
-                                                    className="w-3 h-3 rounded-full flex-shrink-0"
-                                                    style={{ backgroundColor: projectColor }}
-                                                />
-                                                <span className="font-medium text-foreground">{name}</span>
-                                                <span className="text-muted-foreground">•</span>
-                                                <span className="font-semibold text-foreground">{value} {sessionText}</span>
-                                            </div>
-                                        ];
-                                    }
-                                }}
-                                className="bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg p-3"
-                            />} 
+                                        <div className="space-y-1">
+                                            {sortedPayload.map((entry, index) => {
+                                                const { value, name } = entry;
+                                                const projectColor = chartConfig[name as string]?.color || "hsl(var(--muted-foreground))";
+                                                
+                                                if (showTimeSpent) {
+                                                    const timeValue = formatTimeSpent(Number(value));
+                                                    return (
+                                                        <div key={`${name}-${index}`} className="flex items-center gap-2">
+                                                            <div 
+                                                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                                                style={{ backgroundColor: projectColor }}
+                                                            />
+                                                            <span className="font-medium text-foreground">{name}</span>
+                                                            <span className="text-muted-foreground">•</span>
+                                                            <span className="font-mono text-sm font-semibold text-foreground">{timeValue}</span>
+                                                        </div>
+                                                    );
+                                                } else {
+                                                    const sessionText = Number(value) === 1 ? 'session' : 'sessions';
+                                                    return (
+                                                        <div key={`${name}-${index}`} className="flex items-center gap-2">
+                                                            <div 
+                                                                className="w-3 h-3 rounded-full flex-shrink-0"
+                                                                style={{ backgroundColor: projectColor }}
+                                                            />
+                                                            <span className="font-medium text-foreground">{name}</span>
+                                                            <span className="text-muted-foreground">•</span>
+                                                            <span className="font-semibold text-foreground">{value} {sessionText}</span>
+                                                        </div>
+                                                    );
+                                                }
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            }} 
                         />
 
                         {Object.entries(chartConfig).map(([key, value], index) => {

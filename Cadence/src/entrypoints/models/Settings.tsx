@@ -9,6 +9,9 @@ export class Settings {
     public longBreakEnabled: boolean = false, // Default to long breaks disabled
     public breakAutoStart: boolean = true, // Default to auto-start breaks
     public focusAutoStart: boolean = false, // Default to not auto-start focus
+    public notificationsEnabled: boolean = true, // Default to notifications enabled
+    public soundEnabled: boolean = true, // Default to sound enabled
+    public soundVolume: number = 0.7, // Default to 70% volume
     public dailySessionsGoal: number = 10, // Default to 10 sessions per day
     public preferredChartType: ChartType = ChartType.Sessions, // Default to sessions chart
     public projects: string[] = ['General'], // Default to General project
@@ -23,6 +26,9 @@ export class Settings {
     longBreakEnabled: boolean; 
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
+    notificationsEnabled: boolean;
+    soundEnabled: boolean;
+    soundVolume: number;
     dailySessionsGoal: number;
     preferredChartType: ChartType;
     projects: string[];
@@ -36,6 +42,9 @@ export class Settings {
         longBreakEnabled: this.longBreakEnabled,
         breakAutoStart: this.breakAutoStart,
         focusAutoStart: this.focusAutoStart,
+        notificationsEnabled: this.notificationsEnabled,
+        soundEnabled: this.soundEnabled,
+        soundVolume: this.soundVolume,
         dailySessionsGoal: this.dailySessionsGoal,
         preferredChartType: this.preferredChartType,
         projects: this.projects,
@@ -51,6 +60,9 @@ export class Settings {
     longBreakEnabled: boolean; 
     breakAutoStart: boolean; 
     focusAutoStart: boolean;
+    notificationsEnabled?: boolean;
+    soundEnabled?: boolean;
+    soundVolume?: number;
     dailySessionsGoal?: number;
     preferredChartType?: ChartType;
     projects?: string[];
@@ -66,6 +78,9 @@ export class Settings {
         json.longBreakEnabled,
         json.breakAutoStart,
         json.focusAutoStart,
+        json.notificationsEnabled ?? true, // Default to notifications enabled
+        json.soundEnabled ?? false, // Default to sound disabled
+        json.soundVolume ?? 0.7, // Default to 70% volume
         json.dailySessionsGoal ?? 10, // Default to 10 if goal not provided
         json.preferredChartType ?? ChartType.Sessions, // Default to sessions if not provided
         projects,

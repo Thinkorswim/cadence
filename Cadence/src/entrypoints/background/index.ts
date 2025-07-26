@@ -9,6 +9,59 @@ import { Session } from "../models/Session";
 import { Settings } from "../models/Settings";
 
 export default defineBackground(() => {
+    // Offscreen document management
+    let offscreenDocumentCreated = false;
+
+    const createOffscreenDocument = async () => {
+        if (offscreenDocumentCreated) return;
+        
+        try {
+            // Check if offscreen API is available (Chrome/Edge only)
+            if (!browser.offscreen) {
+                console.warn('Offscreen API not available in this browser');
+                return;
+            }
+            
+            await browser.offscreen.createDocument({
+                url: 'offscreen.html',
+                reasons: ['AUDIO_PLAYBACK'],
+                justification: 'Playing notification sounds for timer completion'
+            });
+            offscreenDocumentCreated = true;
+        } catch (error) {
+            console.error('Error creating offscreen document:', error);
+        }
+    };
+
+    const playNotificationSound = async (settings: Settings) => {
+        try {
+            if (settings.soundEnabled) {
+                // Check if we're in Firefox or if offscreen API is not available
+                if (import.meta.env.BROWSER === 'firefox' || !browser.offscreen) {
+                    // Firefox fallback: Use Audio Web API directly in background script
+                    // Note: This might not work in all browsers due to autoplay policies
+                    try {
+                        const audio = new Audio(browser.runtime.getURL('/sounds/alarm.wav'));
+                        audio.volume = Math.max(0, Math.min(1, settings.soundVolume));
+                        await audio.play();
+                    } catch (error) {
+                        console.warn('Direct audio playback failed, this is expected in some browsers:', error);
+                    }
+                } else {
+                    // Chrome/Edge: Use offscreen document
+                    await createOffscreenDocument();
+                    browser.runtime.sendMessage({
+                        action: 'playSound',
+                        soundFile: '/sounds/alarm.wav',
+                        volume: settings.soundVolume
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error playing notification sound:', error);
+        }
+    };
+
     browser.runtime.onInstalled.addListener((object) => {
         if (object.reason === 'install') {
             browser.runtime.openOptionsPage();
@@ -24,6 +77,9 @@ export default defineBackground(() => {
                     longBreakEnabled: false, // Default to long breaks disabled
                     breakAutoStart: true, // Default to auto-start breaks
                     focusAutoStart: false, // Default to not auto-start focus
+                    notificationsEnabled: true, // Default to notifications enabled
+                    soundEnabled: true, // Default to sound enabled
+                    soundVolume: 0.7, // Default to 70% volume
                     dailySessionsGoal: 10, // Default to 10 sessions per day
                     projects: ['General'], // Default to General project
                     selectedProject: 'General' // Default to General project
@@ -52,6 +108,21 @@ export default defineBackground(() => {
 
                 if (data.settings.selectedProject === undefined) {
                     updatedSettings.selectedProject = 'General';
+                    needsUpdate = true;
+                }
+
+                if (data.settings.notificationsEnabled === undefined) {
+                    updatedSettings.notificationsEnabled = true;
+                    needsUpdate = true;
+                }
+
+                if (data.settings.soundEnabled === undefined) {
+                    updatedSettings.soundEnabled = true;
+                    needsUpdate = true;
+                }
+
+                if (data.settings.soundVolume === undefined) {
+                    updatedSettings.soundVolume = 0.7;
                     needsUpdate = true;
                 }
 
@@ -123,19 +194,22 @@ export default defineBackground(() => {
                     clearInterval(timer!);
                     timer = null;
 
-                    // Show notification for end of focus session
-                    if (typeof browser.notifications !== 'undefined') {
-                        browser.notifications.create({
-                            type: 'basic',
-                            iconUrl: browser.runtime.getURL('/icon/256-green.png'),
-                            title: 'Focus Session Complete',
-                            message: 'Time for a break'
-                        });
-                    }
-
                     browser.storage.local.get(["dailyStats", "settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
                         const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
+
+                        // Show notification for end of focus session
+                        if (settings.notificationsEnabled && typeof browser.notifications !== 'undefined') {
+                            browser.notifications.create({
+                                type: 'basic',
+                                iconUrl: browser.runtime.getURL('/icon/256-green.png'),
+                                title: 'Focus Session Complete',
+                                message: 'Time for a break'
+                            });
+                        }
+
+                        // Play notification sound
+                        playNotificationSound(settings);
 
                         const completedSession = CompletedSession.fromJSON({
                             totalTime: session.totalTime,
@@ -200,19 +274,21 @@ export default defineBackground(() => {
                     clearInterval(timer!);
                     timer = null;
 
-                    // Show notification for end of break
-                    if (typeof browser.notifications !== 'undefined') {
-                        browser.notifications.create({
-                            type: 'basic',
-                            iconUrl: browser.runtime.getURL('/icon/256.png'),
-                            title: 'Break Ended',
-                            message: 'Time to focus again'
-                        });
-                    }
-
                     browser.storage.local.get(["settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
                         if (settings) {
+                            // Show notification for end of break
+                            if (settings.notificationsEnabled && typeof browser.notifications !== 'undefined') {
+                                browser.notifications.create({
+                                    type: 'basic',
+                                    iconUrl: browser.runtime.getURL('/icon/256.png'),
+                                    title: 'Break Ended',
+                                    message: 'Time to focus again'
+                                });
+                            }
+
+                            // Play notification sound
+                            playNotificationSound(settings);
                             session.timerState = TimerState.Focus;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();
@@ -246,19 +322,21 @@ export default defineBackground(() => {
                     clearInterval(timer!);
                     timer = null;
 
-                    // Show notification for end of long break
-                    if (typeof browser.notifications !== 'undefined') {
-                        browser.notifications.create({
-                            type: 'basic',
-                            iconUrl: browser.runtime.getURL('/icon/256.png'),
-                            title: 'Long Break Ended',
-                            message: 'Time to focus again'
-                        });
-                    }
-
                     browser.storage.local.get(["settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
                         if (settings) {
+                            // Show notification for end of long break
+                            if (settings.notificationsEnabled && typeof browser.notifications !== 'undefined') {
+                                browser.notifications.create({
+                                    type: 'basic',
+                                    iconUrl: browser.runtime.getURL('/icon/256.png'),
+                                    title: 'Long Break Ended',
+                                    message: 'Time to focus again'
+                                });
+                            }
+
+                            // Play notification sound
+                            playNotificationSound(settings);
                             session.timerState = TimerState.Focus;
                             session.elapsedTime = 0;
                             session.timeStarted = new Date();

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
@@ -57,6 +58,9 @@ function Options() {
 
   const [breakAutoStart, setBreakAutoStart] = useState(false);
   const [focusAutoStart, setFocusAutoStart] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundVolume, setSoundVolume] = useState(0.7);
 
   // State to store the selected text
   const [ctaDiscordText, setCtaDiscordTexts] = useState<string>('');
@@ -85,7 +89,7 @@ function Options() {
   const [addProjectDialogOpen, setAddProjectDialogOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
   const [projectError, setProjectError] = useState('');
-  
+
   // Sessions management state
   const [editSessionDialogOpen, setEditSessionDialogOpen] = useState(false);
   const [addSessionDialogOpen, setAddSessionDialogOpen] = useState(false);
@@ -101,11 +105,11 @@ function Options() {
       bgColorSelected: '#eee',
     }
   ]);
-  
+
   // Input field values for datetime-local inputs (separate from editingSession)
   const [startTimeInput, setStartTimeInput] = useState<string>('');
   const [endTimeInput, setEndTimeInput] = useState<string>('');
-  
+
   // Project selector state for dialog
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
 
@@ -161,6 +165,9 @@ function Options() {
         const settings = result.settings;
         setFocusAutoStart(settings.focusAutoStart);
         setBreakAutoStart(settings.breakAutoStart);
+        setNotificationsEnabled(settings.notificationsEnabled ?? true);
+        setSoundEnabled(settings.soundEnabled ?? false);
+        setSoundVolume(settings.soundVolume ?? 0.7);
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
         setLongBreakTime(settings.longBreakTime || 15 * 60);
@@ -302,6 +309,33 @@ function Options() {
     });
   }
 
+  const handleToggleNotifications = (checked: boolean) => {
+    setNotificationsEnabled(checked);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.notificationsEnabled = checked;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  }
+
+  const handleToggleSound = (checked: boolean) => {
+    setSoundEnabled(checked);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.soundEnabled = checked;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  }
+
+  const handleVolumeChange = (volume: number) => {
+    setSoundVolume(volume);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.soundVolume = volume;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  }
+
   const handleSaveLongBreakTime = () => {
     browser.storage.local.get(['settings', 'session'], (data) => {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
@@ -400,10 +434,10 @@ function Options() {
         delete updatedStats[date];
       }
     }
-    
+
     const newHistoricalStats = new HistoricalStats(updatedStats);
     setHistoricalStats(newHistoricalStats);
-    
+
     // Save to storage
     browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
   };
@@ -430,7 +464,7 @@ function Options() {
   const handleAddSession = () => {
     const now = new Date();
     const twentyFiveMinutesAgo = new Date(now.getTime() - 25 * 60 * 1000);
-    
+
     const newSession = new CompletedSession(
       25 * 60, // Default 25 minutes
       twentyFiveMinutesAgo,
@@ -535,7 +569,7 @@ function Options() {
             </TabsContent>
 
 
-             {/* Sessions TAB */}
+            {/* Sessions TAB */}
             <TabsContent value="sessions">
               <div className='mt-10 mb-5'>
                 <div className='text-3xl font-bold w-full text-primary'>
@@ -559,7 +593,16 @@ function Options() {
                   Settings
                 </div>
 
-                <div className='mt-6 bg-muted p-5 rounded-xl'>
+                <div className='mt-6 bg-muted p-5 pt-3 rounded-xl'>
+                  <ProjectsTable
+                    projects={projects.map(name => ({ name }))}
+                    selectedProject={selectedProject}
+                    addProject={addProject}
+                    deleteProject={deleteProject}
+                  />
+                </div>
+
+                <div className='mt-3 bg-muted p-5 rounded-xl'>
                   <div className="flex items-center justify-between max-w-[300px]">
                     <div className="flex items-center">
                       <Label className='text-base' htmlFor="autoStartFocus">Focus Time</Label>
@@ -632,7 +675,7 @@ function Options() {
                       <Pencil className="ml-2 w-4 h-4 text-primary" />
                     </div>
                   </div>
-            
+
                   <div className="flex items-center justify-between max-w-[300px] mt-5">
                     <div className="flex items-center">
                       <Label className='text-base' htmlFor="longBreakEnabled">Long Breaks</Label>
@@ -758,17 +801,86 @@ function Options() {
                       onCheckedChange={handleToggleBreakAutoStart}
                     />
                   </div>
-                </div>
 
+                  <div className="flex items-center justify-between max-w-[300px] mt-5">
+                    <div className="flex items-center">
+                      <Label className='text-base' htmlFor="notificationsEnabled">Notifications</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Show desktop notifications when sessions complete.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="notificationsEnabled"
+                      className='data-[state=unchecked]:bg-white'
+                      checked={notificationsEnabled}
+                      onCheckedChange={handleToggleNotifications}
+                    />
+                  </div>
 
+                  <div className="flex items-center justify-between max-w-[300px] mt-5">
+                    <div className="flex items-center">
+                      <Label className='text-base' htmlFor="soundEnabled">Sound Notifications</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Play sound notifications when sessions complete.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="soundEnabled"
+                      className='data-[state=unchecked]:bg-white'
+                      checked={soundEnabled}
+                      onCheckedChange={handleToggleSound}
+                    />
+                  </div>
 
-                <div className='mt-3 bg-muted p-5 rounded-xl'>
-                  <ProjectsTable
-                    projects={projects.map(name => ({ name }))}
-                    selectedProject={selectedProject}
-                    addProject={addProject}
-                    deleteProject={deleteProject}
-                  />
+                  {soundEnabled && (
+                    <div className="max-w-[300px] mt-5">
+                      <div className="flex items-center mb-3">
+                        <Label className='text-base' htmlFor="soundVolume">Volume</Label>
+                        <TooltipProvider>
+                          <Tooltip delayDuration={0}>
+                            <TooltipTrigger asChild>
+                              <button className="flex items-center justify-center ml-2 rounded-full">
+                                <Info className="w-4 h-4 text-secondary" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent className="bg-secondary text-white p-2 rounded">
+                              Adjust the volume of sound notifications (0% - 100%).
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <span className="ml-auto text-sm text-secondary">
+                          {Math.round(soundVolume * 100)}%
+                        </span>
+                      </div>
+                      <Slider
+                        id="soundVolume"
+                        value={[soundVolume]}
+                        onValueChange={(value) => handleVolumeChange(value[0])}
+                        max={1}
+                        min={0}
+                        step={0.01}
+                        className="w-full"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </TabsContent>
@@ -1140,7 +1252,7 @@ function Options() {
                             className="w-full mt-2 justify-between"
                           >
                             <div className="flex items-center">
-                              <div 
+                              <div
                                 className="w-3 h-3 rounded-full mr-2"
                                 style={{ backgroundColor: generateColorFromString(editingSession.project) }}
                               />
@@ -1179,7 +1291,7 @@ function Options() {
                                           editingSession.project === project ? "opacity-100" : "opacity-0"
                                         )}
                                       />
-                                      <div 
+                                      <div
                                         className="w-3 h-3 rounded-full flex-shrink-0 mt-0.5"
                                         style={{ backgroundColor: generateColorFromString(project) }}
                                       />

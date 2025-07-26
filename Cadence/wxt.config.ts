@@ -3,12 +3,14 @@ import tailwindcss from '@tailwindcss/vite'
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
-  manifest: {
+  manifest: ({ browser }) => ({
     permissions: [
       "storage",
-      "notifications"
+      "notifications",
+      // Only include offscreen permission for Chrome and Edge
+      ...(browser === 'chrome' || browser === 'edge' ? ['offscreen'] : [])
     ]
-  },
+  }),
   modules: ['@wxt-dev/module-react'],
   srcDir: "src",
   outDir: "dist",
@@ -16,4 +18,3 @@ export default defineConfig({
     plugins: [tailwindcss()]
   })
 });
- 

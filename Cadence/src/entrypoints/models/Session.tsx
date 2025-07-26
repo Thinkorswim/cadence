@@ -34,8 +34,8 @@ export class Session {
   static fromJSON(json: {
     elapsedTime: number;
     totalTime: number;
-    timerState: TimerState;
     timeStarted: string;
+    timerState: TimerState;
     isPaused: boolean;
     isStopped?: boolean;
     project?: string;
