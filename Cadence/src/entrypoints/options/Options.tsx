@@ -427,6 +427,8 @@ function Options() {
   // Session management functions
   const handleDeleteSession = (date: string, sessionIndex: number) => {
     const updatedStats = { ...historicalStats.stats };
+    const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
+    
     if (updatedStats[date]) {
       updatedStats[date] = updatedStats[date].filter((_, index) => index !== sessionIndex);
       if (updatedStats[date].length === 0) {
@@ -437,8 +439,26 @@ function Options() {
     const newHistoricalStats = new HistoricalStats(updatedStats);
     setHistoricalStats(newHistoricalStats);
 
-    // Save to storage
-    browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+    // If deleting from today, also update dailyStats
+    if (date === today) {
+      browser.storage.local.get(['dailyStats'], (data) => {
+        const dailyStats = DailyStats.fromJSON(data.dailyStats || {
+          date: today,
+          completedSessions: []
+        });
+
+        // Update dailyStats with today's sessions from historicalStats
+        dailyStats.date = today;
+        dailyStats.completedSessions = updatedStats[today] || [];
+
+        browser.storage.local.set({ 
+          historicalStats: newHistoricalStats.toJSON(),
+          dailyStats: dailyStats.toJSON()
+        });
+      });
+    } else {
+      browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+    }
   };
 
   const handleEditSession = (date: string, sessionIndex: number) => {
@@ -493,6 +513,7 @@ function Options() {
 
     const updatedStats = { ...historicalStats.stats };
     const sessionDate = updatedSession.timeEnded.toLocaleDateString('en-CA').slice(0, 10); // Get YYYY-MM-DD format
+    const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
 
     if (selectedSessionDate === '') {
       // Adding new session
@@ -520,7 +541,27 @@ function Options() {
 
     const newHistoricalStats = new HistoricalStats(updatedStats);
     setHistoricalStats(newHistoricalStats);
-    browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+
+    // If the session is for today, also update dailyStats
+    if (sessionDate === today) {
+      browser.storage.local.get(['dailyStats'], (data) => {
+        const dailyStats = DailyStats.fromJSON(data.dailyStats || {
+          date: today,
+          completedSessions: []
+        });
+
+        // Update dailyStats with today's sessions from historicalStats
+        dailyStats.date = today;
+        dailyStats.completedSessions = updatedStats[today] || [];
+
+        browser.storage.local.set({ 
+          historicalStats: newHistoricalStats.toJSON(),
+          dailyStats: dailyStats.toJSON()
+        });
+      });
+    } else {
+      browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+    }
 
     setEditSessionDialogOpen(false);
     setAddSessionDialogOpen(false);
@@ -1369,7 +1410,6 @@ function Options() {
                           value={startTimeInput}
                           onChange={(e) => {
                             setStartTimeInput(e.target.value);
-                            // Only update the session if the date is valid
                             const newStartTime = new Date(e.target.value);
                             if (!isNaN(newStartTime.getTime()) && editingSession) {
                               setEditingSession(new CompletedSession(
@@ -1391,7 +1431,7 @@ function Options() {
                           value={endTimeInput}
                           onChange={(e) => {
                             setEndTimeInput(e.target.value);
-                            // Only update the session if the date is valid
+                            
                             const newEndTime = new Date(e.target.value);
                             if (!isNaN(newEndTime.getTime()) && editingSession) {
                               setEditingSession(new CompletedSession(

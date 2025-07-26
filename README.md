@@ -4,11 +4,9 @@
 
 Cadence helps you stay focused with customizable Pomodoro-style timers (work/break cycles).
 
-You can set personalized work and break intervals that match your rhythm and energy levels. Whether you are deep into a project or just need help getting started, Cadence gives structure to your time and builds momentum through consistent focus cycles.
+You can set personalized work and break intervals that match your rhythm and energy levels. Cadence also helps you stay on track with features like project tracking, productivity stats, and daily goals — giving you insight into how you spend your time and helping you build better habits.
 
-Cadence is lightweight, reliable, and intuitive. It gives you the flexibility to tailor your sessions and stay in control of your productivity.
-
-The extension never saves, sends or uses any of your information for purposes other than its core functionality.
+Cadence is lightweight, reliable, and intuitive. It never saves, sends, or uses any of your information for purposes other than its core functionality.
 
 ## Install Locally (Chrome)
 
