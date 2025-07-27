@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2, AlertCircle, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from './ui/alert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     Table,
     TableBody,
@@ -10,7 +10,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { ScrollArea } from './ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Dialog,
     DialogContent,

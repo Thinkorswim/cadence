@@ -28,11 +28,9 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatisticsChart } from './StatisticsChart';
 import { Settings } from '../models/Settings';
-import { BlockedWebsite } from '../models/BlockedWebsite';
 import { BlockedWebsites } from '../models/BlockedWebsites';
-import { BlockedWebsitesTable } from '@/components/BlockedWebsitesTable';
-import { BlockedWebsiteForm } from '@/components/BlockedWebsiteForm';
-import { validateURL, extractHostnameAndDomain } from '@/lib/utils';
+import { BlockedWebsitesTable } from './BlockedWebsitesTable';
+import { BlockedWebsiteForm } from './BlockedWebsiteForm';
 import { Session } from '../models/Session';
 import { CompletedSession } from '../models/CompletedSession';
 import { TimerState } from '../models/TimerState';
@@ -45,29 +43,32 @@ import { ProjectUtils } from '@/lib/ProjectUtils';
 import { cn, generateColorFromString } from '@/lib/utils';
 
 function Options() {
-  // Define the list of call to action texts for Discord
-  const ctaDiscordTexts: string[] = [
-    'Have a question? Join the',
-    'Need help? Join the',
-    'Have a suggestion? Join the',
-    'Want to chat? Join the',
-    'Like productivity? Join the',
-    'Have feedback? Join the',
-  ];
+  const [ctaProperty, setCtaProperty] = useState<string>('');
+  const [ctaDiscordText, setCtaDiscordText] = useState<string>('');
 
-  const selectRandomText = () => {
-    const randomIndex = Math.floor(Math.random() * ctaDiscordTexts.length);
-    setCtaDiscordText(ctaDiscordTexts[randomIndex]);
+  const selectCallToAction = () => {
+    const randomProperty = Math.random() < 0.5 ? 'discord' : 'github';
+    setCtaProperty(randomProperty);
+
+    if (randomProperty === 'discord') {
+      const ctaDiscordTexts: string[] = [
+        'Have a question? Join the',
+        'Need help? Join the',
+        'Have a suggestion? Join the',
+        'Want to chat? Join the',
+        'Like productivity? Join the',
+        'Have feedback? Join the',
+      ];
+
+      const randomIndex = Math.floor(Math.random() * ctaDiscordTexts.length);
+      setCtaDiscordText(ctaDiscordTexts[randomIndex]);
+    }
   };
-
   const [breakAutoStart, setBreakAutoStart] = useState(false);
   const [focusAutoStart, setFocusAutoStart] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
-
-  // State to store the Discord call to action text
-  const [ctaDiscordText, setCtaDiscordText] = useState<string>('');
 
   const [focusTime, setFocusTime] = useState(25 * 60);
   const [breakTime, setBreakTime] = useState(5 * 60);
@@ -165,8 +166,8 @@ function Options() {
   ]);
 
   useEffect(() => {
-    // Select a random text for the CTA Discord
-    selectRandomText();
+    // Select a random call to action on mount
+    selectCallToAction();
 
     // Load settings from browser storage
     browser.storage.local.get(['settings', 'sessions'], (result) => {
@@ -765,15 +766,15 @@ function Options() {
                         <div className="text-sm text-yellow-800">
                           <div className="font-medium mb-1">Permission Required</div>
                           <div className="leading-relaxed">
-                            Website blocking requires tab access permission to detect when you visit blocked sites during focus sessions. 
+                            Website blocking requires tab access permission to detect when you visit blocked sites during focus sessions.
                             Your browser may show this as
                             <b>
-                              {import.meta.env.BROWSER === 'firefox' 
-                              ? ' Access browser tabs' 
-                              : ' Read browsing history'
+                              {import.meta.env.BROWSER === 'firefox'
+                                ? ' Access browser tabs'
+                                : ' Read browsing history'
                               }
-                            </b>. This permission is only used to check if the current tab matches your blocked websites list. 
-                            We never access, store or share your browsing history or any other data outside of this extension. 
+                            </b>. This permission is only used to check if the current tab matches your blocked websites list.
+                            We never access, store or share your browsing history or any other data outside of this extension.
                           </div>
                         </div>
                       </div>
@@ -1646,12 +1647,34 @@ function Options() {
         <footer className="bg-muted rounded-t-lg py-5 px-8 mt-10">
           <div className="container mx-auto flex justify-between items-center text-xs">
             <div className="flex items-center text-secondary font-semibold"> <img src="/images/gm_logo_red.svg" alt="Grounded Momentum Logo" className="w-6 h-6 mr-2" /> Grounded Momentum <Dot className='w-2 h-2 mx-1' /> 2025 </div>
-            <div className="flex items-center text-secondary font-semibold">
-              {ctaDiscordText}
-              <div className='flex items-center'>
-                <Button className="ml-3 rounded-lg" onClick={() => { window.open("https://discord.gg/SvTsqKwsgN", "_blank") }}>  <img height="20" width="20" className="mr-1 color-white" src="https://cdn.simpleicons.org/discord/ffffff" /> Discord </Button>
+            {ctaProperty === 'discord' ? (
+              <div className="flex items-center text-secondary font-semibold">
+                {ctaDiscordText}
+                <div className='flex items-center'>
+                  <Button className="ml-3 rounded-lg" onClick={() => { window.open("https://discord.gg/SvTsqKwsgN", "_blank") }}>  <img height="20" width="20" className="mr-1 color-white" src="https://cdn.simpleicons.org/discord/ffffff" /> Discord </Button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center text-secondary font-semibold">
+                Want to restrict distractions? Try
+                <div className='flex items-center'>
+                  <Button
+                    className="ml-3 rounded-lg bg-background hover:bg-[#5c4523]/20 text-[#5c4523]"
+                    onClick={() => {
+                      let url = "https://chromewebstore.google.com/detail/time-snatch-block-website/epamlgdeklcjkldoaclgjdmjnchdgbho";
+                      if (import.meta.env.BROWSER === "firefox") {
+                        url = "https://addons.mozilla.org/en-US/firefox/addon/time-snatch-block-websites/";
+                      } else if (import.meta.env.BROWSER === "edge") {
+                        url = "https://microsoftedge.microsoft.com/addons/detail/time-snatch-block-websi/lpaajokgonohalagaibbjbnnelcdfckg";
+                      }
+                      window.open(url, "_blank");
+                    }}
+                  >
+                    <img src="/images/logo-time-snatch.svg" alt="Logo" className="w-5 h-5" /> Time Snatch
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </footer>
       </div>

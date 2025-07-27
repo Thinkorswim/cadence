@@ -4,13 +4,13 @@
 
 Cadence helps you stay focused with customizable Pomodoro-style timers (work/break cycles).
 
-You can set personalized work and break intervals that match your rhythm and energy levels. Cadence also helps you stay on track with features like project tracking, productivity stats, and daily goals — giving you insight into how you spend your time and helping you build better habits.
+You can set personalized work and break intervals that match your rhythm and energy levels. Cadence also helps you stay on track with features like project tracking, productivity stats, and daily goals — giving you insight into how you spend your time and helping you build better habits. During focus sessions, you can block distracting websites to maintain momentum and avoid temptation.
 
 Cadence is lightweight, reliable, and intuitive. It never saves, sends, or uses any of your information for purposes other than its core functionality.
 
 ## Install Locally (Chrome)
 
-1. Download the latest .zip file version from [https://github.com/Thinkorswim/cadence/releases/tag/release](https://github.com/Thinkorswim/cadence/releases)
+1. Download the latest .zip file version from [https://github.com/Thinkorswim/cadence/releases](https://github.com/Thinkorswim/cadence/releases)
 2. Unzip the file and you should have a folder `cadence-chrome`
 3. Move the folder to a permanent location on your computer (do not delete the folder after installation).
 4. Go to the extensions page: chrome://extensions
