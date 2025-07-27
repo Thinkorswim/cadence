@@ -50,3 +50,39 @@ export const generateColorFromString = (str: string): string => {
   
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 };
+
+// Extract hostname and domain from URL
+export const extractHostnameAndDomain = (url: string): string | null => {
+  try {
+    const parsedUrl = new URL(url);
+    return parsedUrl.hostname;
+  } catch (error) {
+    return null;
+  }
+};
+
+// Validate if a string is a valid URL
+export const validateURL = (url: string): boolean => {
+  try {
+    new URL(url);
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+// Check if a URL matches a blocked pattern
+export const isUrlBlocked = (url: string, blockedWebsites: string[]): boolean => {
+  const hostname = extractHostnameAndDomain(url);
+  if (!hostname) return false;
+
+  return blockedWebsites.some(blockedSite => {
+    // Exact match
+    if (hostname === blockedSite) return true;
+    
+    // Subdomain match (e.g., www.example.com matches example.com)
+    if (hostname.endsWith('.' + blockedSite)) return true;
+    
+    return false;
+  });
+};

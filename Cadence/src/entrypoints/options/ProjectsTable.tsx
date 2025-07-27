@@ -72,7 +72,7 @@ export const ProjectsTable: React.FC<ProjectsTableProps> = ({ projects, selected
 
                 <Button className="rounded-sm text-background bg-primary h-7 px-3" onClick={addProject}> <Plus className='h-4 w-4' /> Add Project </Button>
             </div>
-            <ScrollArea className="w-[600px] rounded-sm border-1 bg-background " viewportClassName="max-h-[220px]">
+            <ScrollArea className="w-[600px] rounded-sm border-1 bg-background " viewportClassName="max-h-[223px]">
                 <Table>
                     <TableBody>
                         {(projects === null || projects.length === 0) && (

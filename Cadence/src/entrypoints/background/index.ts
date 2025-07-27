@@ -7,6 +7,9 @@ import { CompletedSession } from "../models/CompletedSession";
 import { HistoricalStats } from "../models/HistoricalStats";
 import { Session } from "../models/Session";
 import { Settings } from "../models/Settings";
+import { BlockedWebsite } from "../models/BlockedWebsite";
+import { BlockedWebsites } from "../models/BlockedWebsites";
+import { extractHostnameAndDomain, isUrlBlocked } from "@/lib/utils";
 
 export default defineBackground(() => {
     // Offscreen document management
@@ -64,7 +67,7 @@ export default defineBackground(() => {
             browser.runtime.openOptionsPage();
         }
 
-        browser.storage.local.get(["settings", "session", "dailyStats", "historicalStats"], (data) => {
+        browser.storage.local.get(["settings", "session", "dailyStats", "historicalStats", "blockedWebsites"], (data) => {
             if (!data.settings) {
                 const defaultSettings: Settings = Settings.fromJSON({
                     focusTime: 25 * 60, // Default to 25 minutes in seconds
@@ -155,6 +158,11 @@ export default defineBackground(() => {
                 });
 
                 browser.storage.local.set({ session: defaultSession.toJSON() });
+            }
+
+            if (!data.blockedWebsites) {
+                const defaultBlockedWebsites = new BlockedWebsites();
+                browser.storage.local.set({ blockedWebsites: defaultBlockedWebsites.toJSON() });
             }
         });
     });
@@ -472,5 +480,74 @@ export default defineBackground(() => {
 
         }
     }
+
+    // Website blocking functionality
+    const checkUrlBlockStatus = (tab: any) => {
+        if (!tab.url || !tab.id) return;
+
+        console.log('Checking URL block status for tab:', tab.id, tab.url);
+
+        browser.storage.local.get(['session', 'blockedWebsites'], (data) => {
+            if (!data.session || !data.blockedWebsites) return;
+
+            const session: Session = Session.fromJSON(data.session);
+            const blockedWebsites: BlockedWebsites = BlockedWebsites.fromJSON(data.blockedWebsites);
+
+            // Only block during active focus sessions and if blocking is enabled
+            if (session.timerState !== TimerState.Focus || session.isStopped || session.isPaused || !blockedWebsites.enabled) {
+                return;
+            }
+
+            // Get current tab URL hostname
+            const currentTabUrl = extractHostnameAndDomain(tab.url);
+            if (!currentTabUrl) return;
+
+            console.log('Current tab hostname:', currentTabUrl);
+            console.log('Blocked websites:', Array.from(blockedWebsites.websites));
+
+            // Check if current hostname is in blocked websites set
+            const isBlocked = blockedWebsites.isWebsiteBlocked(currentTabUrl);
+            
+            console.log('Is blocked:', isBlocked);
+            
+            if (isBlocked) {
+                const blockedPageUrl = browser.runtime.getURL(`/blocked.html?site=${encodeURIComponent(currentTabUrl)}`);
+                
+                console.log('Redirecting to blocked page:', blockedPageUrl);
+                // Redirect to blocked page
+                browser.tabs.update(tab.id, { url: blockedPageUrl });
+            }
+        });
+    };
+
+    // Listen for tab updates
+    browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+        console.log('Tab updated:', tabId, changeInfo, tab);
+        if (changeInfo.status === 'complete' && tab.active && tab.url) {
+            checkUrlBlockStatus(tab);
+        }
+    });
+
+    // Listen for tab activation
+    browser.tabs.onActivated.addListener((activeInfo) => {
+        console.log('Tab activated:', activeInfo);
+        browser.tabs.get(activeInfo.tabId, (tab) => {
+            if (tab.url) {
+                checkUrlBlockStatus(tab);
+            }
+        });
+    });
+
+    // Listen for window focus changes
+    browser.windows.onFocusChanged.addListener((windowId) => {
+        console.log('Window focus changed:', windowId);
+        if (windowId !== browser.windows.WINDOW_ID_NONE) {
+            browser.tabs.query({ currentWindow: true, active: true }, (tabs) => {
+                if (tabs[0] && tabs[0].url) {
+                    checkUrlBlockStatus(tabs[0]);
+                }
+            });
+        }
+    });
 
 });

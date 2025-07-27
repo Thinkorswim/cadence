@@ -2,7 +2,7 @@ import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useCallback } from 'react';
-import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check } from 'lucide-react'
+import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
@@ -28,6 +28,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatisticsChart } from './StatisticsChart';
 import { Settings } from '../models/Settings';
+import { BlockedWebsite } from '../models/BlockedWebsite';
+import { BlockedWebsites } from '../models/BlockedWebsites';
+import { BlockedWebsitesTable } from '@/components/BlockedWebsitesTable';
+import { BlockedWebsiteForm } from '@/components/BlockedWebsiteForm';
+import { validateURL, extractHostnameAndDomain } from '@/lib/utils';
 import { Session } from '../models/Session';
 import { CompletedSession } from '../models/CompletedSession';
 import { TimerState } from '../models/TimerState';
@@ -95,7 +100,7 @@ function Options() {
   const [selectedSessionDate, setSelectedSessionDate] = useState<string>('');
   const [selectedSessionIndex, setSelectedSessionIndex] = useState<number>(-1);
   const [editingSession, setEditingSession] = useState<CompletedSession | null>(null);
-  const [sessionDuration, setSessionDuration] = useState(25 * 60); 
+  const [sessionDuration, setSessionDuration] = useState(25 * 60);
   const [sessionDurationCircle, setSessionDurationCircle] = useState<ISettingsPointer[]>([
     {
       value: 25,
@@ -111,6 +116,11 @@ function Options() {
 
   // Project selector state for dialog
   const [projectSelectorOpen, setProjectSelectorOpen] = useState(false);
+
+  // Blocked websites state
+  const [blockedWebsites, setBlockedWebsites] = useState<BlockedWebsites>(new BlockedWebsites());
+  const [tabsPermissionGranted, setTabsPermissionGranted] = useState<boolean>(false);
+  const [isAddWebsiteDialogOpen, setIsAddWebsiteDialogOpen] = useState(false);
 
   // Helper function to safely convert Date to datetime-local string
   const toDateTimeLocalString = (date: Date): string => {
@@ -179,6 +189,19 @@ function Options() {
       }
     });
 
+  }, []);
+
+  // Check permissions and load blocked websites
+  useEffect(() => {
+    // Check if tabs permission is already granted
+    browser.permissions.contains({
+      permissions: ['tabs']
+    }).then((hasPermission) => {
+      setTabsPermissionGranted(hasPermission);
+      if (hasPermission) {
+        loadBlockedWebsites();
+      }
+    });
   }, []);
 
   // Update break time circle when breakTime changes
@@ -428,7 +451,7 @@ function Options() {
   const handleDeleteSession = (date: string, sessionIndex: number) => {
     const updatedStats = { ...historicalStats.stats };
     const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
-    
+
     if (updatedStats[date]) {
       updatedStats[date] = updatedStats[date].filter((_, index) => index !== sessionIndex);
       if (updatedStats[date].length === 0) {
@@ -451,7 +474,7 @@ function Options() {
         dailyStats.date = today;
         dailyStats.completedSessions = updatedStats[today] || [];
 
-        browser.storage.local.set({ 
+        browser.storage.local.set({
           historicalStats: newHistoricalStats.toJSON(),
           dailyStats: dailyStats.toJSON()
         });
@@ -554,7 +577,7 @@ function Options() {
         dailyStats.date = today;
         dailyStats.completedSessions = updatedStats[today] || [];
 
-        browser.storage.local.set({ 
+        browser.storage.local.set({
           historicalStats: newHistoricalStats.toJSON(),
           dailyStats: dailyStats.toJSON()
         });
@@ -572,6 +595,87 @@ function Options() {
     setEndTimeInput('');
   };
 
+  // Blocked websites functions
+  const handleRequestTabsPermission = () => {
+    browser.permissions.request({
+      permissions: ['tabs']
+    }).then((granted) => {
+      if (granted) {
+        setTabsPermissionGranted(true);
+        loadBlockedWebsites();
+      }
+    });
+  };
+
+  const loadBlockedWebsites = () => {
+    browser.storage.local.get(['blockedWebsites'], (data) => {
+      if (data.blockedWebsites) {
+        const websites = BlockedWebsites.fromJSON(data.blockedWebsites);
+        setBlockedWebsites(websites);
+      }
+    });
+  };
+
+  const handleAddWebsite = () => {
+    setIsAddWebsiteDialogOpen(true);
+  };
+
+  const handleDeleteWebsite = (websiteName: string) => {
+    const updatedBlockedWebsites = new BlockedWebsites(
+      new Set(blockedWebsites.websites),
+      blockedWebsites.enabled
+    );
+    updatedBlockedWebsites.removeWebsite(websiteName);
+
+    setBlockedWebsites(updatedBlockedWebsites);
+
+    // Save to storage
+    browser.storage.local.set({
+      blockedWebsites: updatedBlockedWebsites.toJSON()
+    });
+  };
+
+  const handleDialogClose = () => {
+    setIsAddWebsiteDialogOpen(false);
+    loadBlockedWebsites(); // Reload websites after dialog closes
+  };
+
+  const handleToggleWebsiteBlocking = (checked: boolean) => {
+    if (checked && !tabsPermissionGranted) {
+      // Request permission first when enabling
+      browser.permissions.request({
+        permissions: ['tabs']
+      }).then((granted) => {
+        if (granted) {
+          setTabsPermissionGranted(true);
+          const updatedBlockedWebsites = new BlockedWebsites(
+            new Set(blockedWebsites.websites),
+            true
+          );
+          setBlockedWebsites(updatedBlockedWebsites);
+          browser.storage.local.set({
+            blockedWebsites: updatedBlockedWebsites.toJSON()
+          });
+          loadBlockedWebsites();
+        }
+        // If permission denied, the switch will remain unchecked
+      });
+    } else {
+      // Disabling or already have permission
+      const updatedBlockedWebsites = new BlockedWebsites(
+        new Set(blockedWebsites.websites),
+        checked
+      );
+
+      setBlockedWebsites(updatedBlockedWebsites);
+
+      // Save to storage
+      browser.storage.local.set({
+        blockedWebsites: updatedBlockedWebsites.toJSON()
+      });
+    }
+  };
+
 
 
   return (
@@ -585,6 +689,7 @@ function Options() {
               <TabsList className='py-5 px-2'>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="statistics" onClick={handleStatisticsLoad}><ChartNoAxesColumn className='w-5 h-5 mr-1' /> Statistics </TabsTrigger>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="sessions" onClick={handleStatisticsLoad}><Clock className='w-5 h-5 mr-1' /> Sessions </TabsTrigger>
+                <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="blocked-websites"><Shield className='w-5 h-5 mr-1' /> Blocked Sites</TabsTrigger>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="settings" ><SettingsIcon className='w-5 h-5 mr-1' />  Settings</TabsTrigger>
               </TabsList>
             </div>
@@ -618,6 +723,72 @@ function Options() {
                     editSession={handleEditSession}
                     addSession={handleAddSession}
                   />
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* BLOCKED WEBSITES TAB */}
+            <TabsContent value="blocked-websites">
+              <div className='mt-10 mb-5'>
+                <div className='text-3xl font-bold w-full text-primary'>
+                  Blocked Websites
+                </div>
+                <div className='mt-6 bg-muted p-5 rounded-xl'>
+                  <div className={`flex items-center justify-between max-w-[300px]${blockedWebsites.enabled ? " mb-5" : ""}`}>
+                    <div className="flex items-center">
+                      <Label className='text-base' htmlFor="websiteBlockingEnabled">Website Blocking</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Enable blocking of websites during focus sessions.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="websiteBlockingEnabled"
+                      className='data-[state=unchecked]:bg-white'
+                      checked={blockedWebsites.enabled && tabsPermissionGranted}
+                      onCheckedChange={handleToggleWebsiteBlocking}
+                    />
+                  </div>
+
+                  {!tabsPermissionGranted && (
+                    <div className="mt-5 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <div className="flex items-start">
+                        <Info className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                        <div className="text-sm text-yellow-800">
+                          <div className="font-medium mb-1">Permission Required</div>
+                          <div className="leading-relaxed">
+                            Website blocking requires tab access permission to detect when you visit blocked sites during focus sessions. 
+                            Your browser may show this as
+                            <b>
+                              {import.meta.env.BROWSER === 'firefox' 
+                              ? ' Access browser tabs' 
+                              : ' Read browsing history'
+                              }
+                            </b>. This permission is only used to check if the current tab matches your blocked websites list. 
+                            We never access, store or share your browsing history or any other data outside of this extension. 
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {blockedWebsites.enabled && (
+                    <BlockedWebsitesTable
+                      blockedWebsites={blockedWebsites.websites}
+                      permissionGranted={tabsPermissionGranted}
+                      onAddWebsite={handleAddWebsite}
+                      onDeleteWebsite={handleDeleteWebsite}
+                      onRequestPermission={handleRequestTabsPermission}
+                    />
+                  )}
                 </div>
               </div>
             </TabsContent>
@@ -1258,6 +1429,19 @@ function Options() {
           </DialogContent>
         </Dialog>
 
+        {/* Add Blocked Website Dialog */}
+        <Dialog open={isAddWebsiteDialogOpen} onOpenChange={() => {
+          setIsAddWebsiteDialogOpen(false);
+        }}>
+          <DialogContent className="bg-background w-[370px]">
+            <div className='bg-background m-2 pt-4 px-4 pb-2 rounded-md'>
+              <DialogTitle>Add Blocked Website</DialogTitle>
+              <DialogDescription>
+                <BlockedWebsiteForm callback={handleDialogClose} />
+              </DialogDescription>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Session Edit/Add Dialogs */}
         <Dialog open={editSessionDialogOpen || addSessionDialogOpen} onOpenChange={() => {
@@ -1431,7 +1615,7 @@ function Options() {
                           value={endTimeInput}
                           onChange={(e) => {
                             setEndTimeInput(e.target.value);
-                            
+
                             const newEndTime = new Date(e.target.value);
                             if (!isNaN(newEndTime.getTime()) && editingSession) {
                               setEditingSession(new CompletedSession(

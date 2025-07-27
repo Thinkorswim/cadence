@@ -9,6 +9,9 @@ export default defineConfig({
       "notifications",
       // Only include offscreen permission for Chrome and Edge
       ...(browser === 'chrome' || browser === 'edge' ? ['offscreen'] : [])
+    ],
+    optional_permissions: [
+      "tabs"
     ]
   }),
   modules: ['@wxt-dev/module-react'],
