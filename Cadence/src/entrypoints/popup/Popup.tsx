@@ -30,6 +30,7 @@ import { Session } from '../models/Session';
 import { TimerState } from '../models/TimerState';
 import { Settings } from '../models/Settings';
 import { DailyStats } from '../models/DailyStats';
+import { HistoricalStats } from '../models/HistoricalStats';
 
 const chartConfig = {
   progress: {
@@ -113,6 +114,20 @@ function Popup() {
       
       if (data.dailyStats) {
         const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
+        
+        // Check if we need to move old daily stats to historical and reset for new day
+        if (dailyStats.date !== new Date().toLocaleDateString('en-CA').slice(0, 10)) {
+          browser.storage.local.get(["historicalStats"], (historicalData) => {
+            const historicalStats = HistoricalStats.fromJSON(historicalData.historicalStats);
+            historicalStats.stats[dailyStats.date] = dailyStats.completedSessions ? dailyStats.completedSessions : [];
+            browser.storage.local.set({ historicalStats: historicalStats.toJSON() });
+          });
+
+          dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
+          dailyStats.completedSessions = [];
+          browser.storage.local.set({ dailyStats: dailyStats.toJSON() });
+        }
+        
         setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
       }
     });
