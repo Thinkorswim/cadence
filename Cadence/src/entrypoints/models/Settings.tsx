@@ -1,4 +1,5 @@
 import { ChartType } from './ChartType';
+import { BadgeDisplayFormat } from './BadgeDisplayFormat';
 
 export class Settings {
   constructor(
@@ -14,6 +15,7 @@ export class Settings {
     public soundVolume: number = 0.7, // Default to 70% volume
     public dailySessionsGoal: number = 10, // Default to 10 sessions per day
     public preferredChartType: ChartType = ChartType.Sessions, // Default to sessions chart
+    public badgeDisplayFormat: BadgeDisplayFormat = BadgeDisplayFormat.Minutes, // Default to minutes format
     public projects: string[] = ['General'], // Default to General project
     public selectedProject: string = 'General' // Default to General project
   ) {}
@@ -31,6 +33,7 @@ export class Settings {
     soundVolume: number;
     dailySessionsGoal: number;
     preferredChartType: ChartType;
+    badgeDisplayFormat: BadgeDisplayFormat;
     projects: string[];
     selectedProject: string;
    } {
@@ -47,6 +50,7 @@ export class Settings {
         soundVolume: this.soundVolume,
         dailySessionsGoal: this.dailySessionsGoal,
         preferredChartType: this.preferredChartType,
+        badgeDisplayFormat: this.badgeDisplayFormat,
         projects: this.projects,
         selectedProject: this.selectedProject,
     };
@@ -65,6 +69,7 @@ export class Settings {
     soundVolume?: number;
     dailySessionsGoal?: number;
     preferredChartType?: ChartType;
+    badgeDisplayFormat?: BadgeDisplayFormat;
     projects?: string[];
     selectedProject?: string;
    }): Settings {
@@ -83,6 +88,7 @@ export class Settings {
         json.soundVolume ?? 0.7, // Default to 70% volume
         json.dailySessionsGoal ?? 10, // Default to 10 if goal not provided
         json.preferredChartType ?? ChartType.Sessions, // Default to sessions if not provided
+        json.badgeDisplayFormat ?? BadgeDisplayFormat.Minutes, // Default to minutes format
         projects,
         json.selectedProject ?? (projects.length > 0 ? projects[0] : 'General') // Default to first project or General
     );

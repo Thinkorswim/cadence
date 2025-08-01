@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatisticsChart } from './StatisticsChart';
 import { Settings } from '../models/Settings';
+import { BadgeDisplayFormat } from '../models/BadgeDisplayFormat';
 import { BlockedWebsites } from '../models/BlockedWebsites';
 import { BlockedWebsitesTable } from './BlockedWebsitesTable';
 import { BlockedWebsiteForm } from './BlockedWebsiteForm';
@@ -69,6 +71,7 @@ function Options() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
+  const [badgeDisplayFormat, setBadgeDisplayFormat] = useState<BadgeDisplayFormat>(BadgeDisplayFormat.Minutes);
 
   const [focusTime, setFocusTime] = useState(25 * 60);
   const [breakTime, setBreakTime] = useState(5 * 60);
@@ -185,6 +188,7 @@ function Options() {
         setLongBreakEnabled(settings.longBreakEnabled || false);
         setDailySessionsGoal(settings.dailySessionsGoal || 10);
         setChartType(settings.preferredChartType || ChartType.Sessions);
+        setBadgeDisplayFormat(settings.badgeDisplayFormat || BadgeDisplayFormat.Minutes);
         setProjects(settings.projects || ['General']);
         setSelectedProject(settings.selectedProject || 'General');
       }
@@ -401,6 +405,20 @@ function Options() {
       settings.dailySessionsGoal = newGoal;
       browser.storage.local.set({ settings: settings.toJSON() });
     });
+  }
+
+  const handleBadgeDisplayFormatChange = (format: BadgeDisplayFormat) => {
+    setBadgeDisplayFormat(format);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.badgeDisplayFormat = format;
+      browser.storage.local.set({ settings: settings.toJSON() });
+    });
+  }
+
+  const handleBadgeDisplayFormatStringChange = (value: string) => {
+    const format = value as BadgeDisplayFormat;
+    handleBadgeDisplayFormatChange(format);
   }
 
   const addProject = () => {
@@ -1089,6 +1107,79 @@ function Options() {
                       />
                     </div>
                   )}
+
+                  <div className="max-w-[300px] mt-8">
+                    <div className="flex items-center mb-3">
+                      <Label className='text-base'>Badge Display Format</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Choose how time is displayed in the browser badge. Minutes format shows "25m" while seconds format shows "25:00".
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div 
+                        className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                          badgeDisplayFormat === BadgeDisplayFormat.Minutes 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => handleBadgeDisplayFormatChange(BadgeDisplayFormat.Minutes)}
+                      >
+                        {/* Minutes Preview */}
+                        <div className="mb-3 flex flex-col items-center">
+                          <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded min-w-[32px] text-center">
+                            25m
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          <RadioGroupItem 
+                            value={BadgeDisplayFormat.Minutes}
+                            checked={badgeDisplayFormat === BadgeDisplayFormat.Minutes}
+                            onChange={() => handleBadgeDisplayFormatChange(BadgeDisplayFormat.Minutes)}
+                            name="badgeDisplayFormat"
+                          />
+                          <Label htmlFor={BadgeDisplayFormat.Minutes} className="ml-2 cursor-pointer font-medium">
+                            Minutes
+                          </Label>
+                        </div>
+                      </div>
+
+                      <div 
+                        className={`flex flex-col items-center p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                          badgeDisplayFormat === BadgeDisplayFormat.Seconds 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                        onClick={() => handleBadgeDisplayFormatChange(BadgeDisplayFormat.Seconds)}
+                      >
+                        {/* Seconds Preview */}
+                        <div className="mb-3 flex flex-col items-center">
+                          <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded min-w-[32px] text-center">
+                            25:00
+                          </div>
+                        </div>
+                        <div className="flex items-center">
+                          <RadioGroupItem 
+                            value={BadgeDisplayFormat.Seconds}
+                            checked={badgeDisplayFormat === BadgeDisplayFormat.Seconds}
+                            onChange={() => handleBadgeDisplayFormatChange(BadgeDisplayFormat.Seconds)}
+                            name="badgeDisplayFormat"
+                          />
+                          <Label htmlFor={BadgeDisplayFormat.Seconds} className="ml-2 cursor-pointer font-medium">
+                            Seconds
+                          </Label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </TabsContent>

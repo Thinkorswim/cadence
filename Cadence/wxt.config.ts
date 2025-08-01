@@ -12,7 +12,26 @@ export default defineConfig({
     ],
     optional_permissions: [
       "tabs"
-    ]
+    ],
+    commands: {
+      ...(browser === 'firefox' ? {
+        "_execute_browser_action": {
+          "suggested_key": {
+            "default": "Ctrl+Shift+Y",
+            "mac": "Command+Shift+Y"
+          },
+          "description": "Open Cadence timer popup"
+        }
+      } : {
+        "_execute_action": {
+          "suggested_key": {
+            "default": "Ctrl+Shift+Y",
+            "mac": "Command+Shift+Y"
+          },
+          "description": "Open Cadence timer popup"
+        }
+      })
+    }
   }),
   modules: ['@wxt-dev/module-react'],
   srcDir: "src",

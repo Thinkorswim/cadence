@@ -21,19 +21,19 @@ type SessionsTableProps = {
     addSession: () => void;
 };
 
-export const SessionsTable: React.FC<SessionsTableProps> = ({ 
-    historicalStats, 
-    deleteSession, 
-    editSession, 
-    addSession 
+export const SessionsTable: React.FC<SessionsTableProps> = ({
+    historicalStats,
+    deleteSession,
+    editSession,
+    addSession
 }) => {
-    
+
     const [currentPage, setCurrentPage] = useState(0);
     const sessionsPerPage = 15;
-    
+
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState<{ date: string; index: number } | null>(null);
-    
+
     const truncateText = (text: string, maxLength: number = 40): string => {
         if (text.length <= maxLength) return text;
         return text.substring(0, maxLength) + '...';
@@ -47,10 +47,20 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
         }).format(date);
     };
 
+    const formatTimeOnly = (date: Date): string => {
+        // Use the user's locale preferences, falling back to language, then system default
+        const userLocale = navigator.languages?.[0] || navigator.language || undefined;
+        const formatter = new Intl.DateTimeFormat(userLocale, {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        return formatter.format(date);
+    };
+
     // Get all sessions from historical stats and flatten them with their dates
     const getAllSessions = (): Array<{ session: CompletedSession; date: string; sessionIndex: number }> => {
         const allSessions: Array<{ session: CompletedSession; date: string; sessionIndex: number }> = [];
-        
+
         Object.entries(historicalStats.stats).forEach(([date, sessions]) => {
             sessions.forEach((session, index) => {
                 allSessions.push({ session, date, sessionIndex: index });
@@ -58,7 +68,7 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
         });
 
         // Sort by timeEnded, most recent first
-        return allSessions.sort((a, b) => 
+        return allSessions.sort((a, b) =>
             new Date(b.session.timeEnded).getTime() - new Date(a.session.timeEnded).getTime()
         );
     };
@@ -108,11 +118,12 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
                     Add Session
                 </Button>
             </div>
-            
+
             <Table className='bg-background rounded-md'>
                 <TableHeader>
                     <TableRow >
                         <TableHead className="pl-5 font-bold">Date</TableHead>
+                        <TableHead className="font-bold">Time Completed</TableHead>
                         <TableHead className="font-bold">Project</TableHead>
                         <TableHead className=" font-bold">Duration</TableHead>
                         <TableHead className="text-center font-bold">Actions</TableHead>
@@ -121,7 +132,7 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
                 <TableBody>
                     {currentSessions.length === 0 && (
                         <TableRow className="h-52">
-                            <TableCell colSpan={4} className="text-center">
+                            <TableCell colSpan={5} className="text-center">
                                 No completed sessions to display. Complete some focus sessions to see them here!
                             </TableCell>
                         </TableRow>
@@ -131,6 +142,7 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
                             <TableCell className="font-medium pl-5">
                                 {formatDateOnly(session.timeEnded)}
                             </TableCell>
+                            <TableCell>{formatTimeOnly(session.timeEnded)}</TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-3">
                                     <div
@@ -144,13 +156,13 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
                             </TableCell>
                             <TableCell>{timeDisplayFormatBadge(session.totalTime)}</TableCell>
                             <TableCell className="flex justify-center items-center space-x-2">
-                                <Pencil 
-                                    className="w-5 h-5 text-primary cursor-pointer hover:text-primary/80" 
-                                    onClick={() => editSession(date, sessionIndex)} 
+                                <Pencil
+                                    className="w-5 h-5 text-primary cursor-pointer hover:text-primary/80"
+                                    onClick={() => editSession(date, sessionIndex)}
                                 />
-                                <Trash2 
-                                    className="w-5 h-5 text-primary cursor-pointer hover:text-primary/80" 
-                                    onClick={() => handleDeleteClick(date, sessionIndex)} 
+                                <Trash2
+                                    className="w-5 h-5 text-primary cursor-pointer hover:text-primary/80"
+                                    onClick={() => handleDeleteClick(date, sessionIndex)}
                                 />
                             </TableCell>
                         </TableRow>
@@ -189,7 +201,7 @@ export const SessionsTable: React.FC<SessionsTableProps> = ({
                     </div>
                 </div>
             )}
-            
+
             {/* Delete Confirmation Dialog */}
             <Dialog open={isDeleteDialogOpen} onOpenChange={handleCancelDelete}>
                 <DialogContent className="bg-background w-[350px]">

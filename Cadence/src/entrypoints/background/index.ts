@@ -1,19 +1,27 @@
 import { Timer } from "lucide-react";
 import { TimerState } from "../models/TimerState";
 import { ChartType } from "../models/ChartType";
+import { BadgeDisplayFormat } from "../models/BadgeDisplayFormat";
 import { timeDisplayFormatBadge } from "@/lib/utils";
 import { DailyStats } from "../models/DailyStats";
 import { CompletedSession } from "../models/CompletedSession";
 import { HistoricalStats } from "../models/HistoricalStats";
 import { Session } from "../models/Session";
 import { Settings } from "../models/Settings";
-import { BlockedWebsite } from "../models/BlockedWebsite";
 import { BlockedWebsites } from "../models/BlockedWebsites";
 import { extractHostnameAndDomain, isUrlBlocked } from "@/lib/utils";
 
 export default defineBackground(() => {
     // Offscreen document management
     let offscreenDocumentCreated = false;
+    
+    // Cache settings that are used frequently
+    let cachedBadgeDisplayFormat: BadgeDisplayFormat = BadgeDisplayFormat.Minutes;
+
+    // Function to update cached settings
+    const updateCachedSettings = (settings: Settings) => {
+        cachedBadgeDisplayFormat = settings.badgeDisplayFormat;
+    };
 
     const createOffscreenDocument = async () => {
         if (offscreenDocumentCreated) return;
@@ -81,11 +89,13 @@ export default defineBackground(() => {
                     soundEnabled: true, // Default to sound enabled
                     soundVolume: 0.7, // Default to 70% volume
                     dailySessionsGoal: 10, // Default to 10 sessions per day
+                    badgeDisplayFormat: BadgeDisplayFormat.Minutes, // Default to minutes format
                     projects: ['General'], // Default to General project
                     selectedProject: 'General' // Default to General project
                 });
 
                 browser.storage.local.set({ settings: defaultSettings.toJSON() });
+                cachedBadgeDisplayFormat = defaultSettings.badgeDisplayFormat;
             } else {
                 // Backward compatibility
                 let needsUpdate = false;
@@ -125,10 +135,17 @@ export default defineBackground(() => {
                     updatedSettings.soundVolume = 0.7;
                     needsUpdate = true;
                 }
+
+                if (data.settings.badgeDisplayFormat === undefined) {
+                    updatedSettings.badgeDisplayFormat = BadgeDisplayFormat.Minutes;
+                    needsUpdate = true;
+                }
                 
                 if (needsUpdate) {
                     browser.storage.local.set({ settings: updatedSettings.toJSON() });
                 }
+                
+                cachedBadgeDisplayFormat = updatedSettings.badgeDisplayFormat;
             }
 
 
@@ -167,6 +184,14 @@ export default defineBackground(() => {
         });
     });
 
+    // Listen for storage changes to update cached settings
+    browser.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'local' && changes.settings) {
+            const newSettings = Settings.fromJSON(changes.settings.newValue);
+            updateCachedSettings(newSettings);
+        }
+    });
+
     let timer: NodeJS.Timeout | null = null;
 
     browser.runtime.onStartup.addListener(() => {
@@ -195,6 +220,7 @@ export default defineBackground(() => {
 
                     browser.storage.local.get(["dailyStats", "settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
+                        updateCachedSettings(settings);
                         const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
 
                         // Show notification for end of focus session
@@ -248,7 +274,7 @@ export default defineBackground(() => {
 
                         if (settings.breakAutoStart) {
                             session.isStopped = false;
-                            setBadge(timeDisplayFormatBadge(session.totalTime), "green");
+                            setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "green");
                             timer = setInterval(() => updateTime(), 1000);
                         } else {
                             session.isStopped = true;
@@ -262,7 +288,7 @@ export default defineBackground(() => {
                 } else {
                     browser.storage.local.set({ session: session.toJSON() });
 
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "red");
+                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "red");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             } else if (session && session.timerState === TimerState.ShortBreak) {
@@ -275,6 +301,7 @@ export default defineBackground(() => {
 
                     browser.storage.local.get(["settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
+                        updateCachedSettings(settings);
                         if (settings) {
                             // Show notification for end of break
                             if (settings.notificationsEnabled && typeof browser.notifications !== 'undefined') {
@@ -297,7 +324,7 @@ export default defineBackground(() => {
                             if (settings.focusAutoStart) {
                                 session.isStopped = false;
                                 timer = setInterval(() => updateTime(), 1000);
-                                setBadge(timeDisplayFormatBadge(session.totalTime), "red");
+                                setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
                             } else {
                                 session.isStopped = true;
                                 setBadge("", "red");
@@ -311,7 +338,7 @@ export default defineBackground(() => {
                 } else {
                     browser.storage.local.set({ session: session.toJSON() });
 
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
+                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             } else if (session && session.timerState === TimerState.LongBreak) {
@@ -324,6 +351,7 @@ export default defineBackground(() => {
 
                     browser.storage.local.get(["settings"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
+                        updateCachedSettings(settings);
                         if (settings) {
                             // Show notification for end of long break
                             if (settings.notificationsEnabled && typeof browser.notifications !== 'undefined') {
@@ -346,7 +374,7 @@ export default defineBackground(() => {
                             if (settings.focusAutoStart) {
                                 session.isStopped = false;
                                 timer = setInterval(() => updateTime(), 1000);
-                                setBadge(timeDisplayFormatBadge(session.totalTime), "red");
+                                setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
                             } else {
                                 session.isStopped = true;
                                 setBadge("", "red");
@@ -360,7 +388,7 @@ export default defineBackground(() => {
                 } else {
                     browser.storage.local.set({ session: session.toJSON() });
 
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime), "green");
+                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             }
@@ -374,6 +402,7 @@ export default defineBackground(() => {
                 browser.storage.local.get(["session", "settings"], (data) => {
                     let session: Session = Session.fromJSON(data.session);
                     const settings: Settings = Settings.fromJSON(data.settings);
+                    updateCachedSettings(settings);
 
                     switch (request.action) {
                         case "startTimer":

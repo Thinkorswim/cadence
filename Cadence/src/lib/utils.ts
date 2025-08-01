@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { BadgeDisplayFormat } from "@/entrypoints/models/BadgeDisplayFormat"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -16,12 +17,36 @@ export function convertSecondsToHoursMinutesSeconds(seconds: number): { hours: n
 }
 
 
-export const timeDisplayFormatBadge = (time: number) => {
+export const timeDisplayFormatBadge = (time: number, format: BadgeDisplayFormat = BadgeDisplayFormat.Minutes) => {
+  const { hours, minutes, seconds } = convertSecondsToHoursMinutesSeconds(time)
+  let timeString = ""
+
+  // Always show seconds in the last minute (when remaining time is less than 60 seconds)
+  const shouldShowSeconds = time < 60 || format === BadgeDisplayFormat.Seconds;
+
+  if (hours > 0) {
+    if (shouldShowSeconds) {
+      timeString += `${hours}:` + `${minutes}`.padStart(2, '0') + ":" + `${seconds}`.padStart(2, '0')
+    } else {
+      timeString += `${hours}:` + `${minutes}`.padStart(2, '0')
+    }
+  } else {
+    if (shouldShowSeconds) {
+      timeString += `${minutes}` + ":" + `${seconds}`.padStart(2, '0')
+    } else {
+      timeString += `${minutes}m`
+    }
+  }
+
+  return timeString
+}
+
+export const timeDisplayFormatPopup = (time: number) => {
   const { hours, minutes, seconds } = convertSecondsToHoursMinutesSeconds(time)
   let timeString = ""
 
   if (hours > 0) {
-    timeString += `${hours}:` + `${minutes}`.padStart(2, '0')
+    timeString += `${hours}:` + `${minutes}`.padStart(2, '0') + ":" + `${seconds}`.padStart(2, '0')
   } else {
     timeString += `${minutes}` + ":" + `${seconds}`.padStart(2, '0')
   }

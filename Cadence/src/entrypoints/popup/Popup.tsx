@@ -10,7 +10,7 @@ import {
   RadialBarChart,
 } from "recharts"
 import { ChartConfig, ChartContainer } from "@/components/ui/chart"
-import { cn, timeDisplayFormatBadge, generateColorFromString } from "@/lib/utils"
+import { cn, timeDisplayFormatPopup, generateColorFromString } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   Popover,
@@ -303,7 +303,7 @@ function Popup() {
                         y={(viewBox.cy ?? 0) + 5}
                         className="fill-foreground text-4xl font-black"
                       >
-                        {timeDisplayFormatBadge(timerTime)}
+                        {timeDisplayFormatPopup(timerTime)}
                       </tspan>
                     </text>
                   )
