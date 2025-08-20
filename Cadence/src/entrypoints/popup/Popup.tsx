@@ -120,15 +120,15 @@ function Popup() {
           browser.storage.local.get(["historicalStats"], (historicalData) => {
             const historicalStats = HistoricalStats.fromJSON(historicalData.historicalStats);
             historicalStats.stats[dailyStats.date] = dailyStats.completedSessions ? dailyStats.completedSessions : [];
-            browser.storage.local.set({ historicalStats: historicalStats.toJSON() });
-          });
 
-          dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
-          dailyStats.completedSessions = [];
-          browser.storage.local.set({ dailyStats: dailyStats.toJSON() });
+            dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
+            dailyStats.completedSessions = [];
+            browser.storage.local.set({ historicalStats: historicalStats.toJSON(), dailyStats: dailyStats.toJSON() });
+            setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
+          });
+        } else {
+            setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
         }
-        
-        setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
       }
     });
   }, []);

@@ -244,9 +244,12 @@ export default defineBackground(() => {
                         });
 
                         if (dailyStats.date !== new Date().toLocaleDateString('en-CA').slice(0, 10)) {
+
+                            const dailyStatsSnapshot = DailyStats.fromJSON(dailyStats.toJSON());
+
                             browser.storage.local.get(["historicalStats"], (data) => {
                                 const historicalStats = HistoricalStats.fromJSON(data.historicalStats);
-                                historicalStats.stats[dailyStats.date] = dailyStats.completedSessions ? dailyStats.completedSessions : [];
+                                historicalStats.stats[dailyStatsSnapshot.date] = dailyStatsSnapshot.completedSessions ? dailyStatsSnapshot.completedSessions : [];
                                 browser.storage.local.set({ historicalStats: historicalStats.toJSON() });
                             });
 

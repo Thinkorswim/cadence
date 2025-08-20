@@ -301,6 +301,14 @@ export function StatisticsChart({ historicalStats, chartType }: StatisticsChartP
                                     <div className="bg-background/95 backdrop-blur-sm border border-border/50 rounded-lg shadow-lg p-3">
                                         <div className="font-semibold text-foreground mb-2">
                                             {label}
+                                            {!isNaN(Date.parse(label)) && (
+                                                <>
+                                                    <span className="mx-1.5">-</span>
+                                                    <span>
+                                                        {new Date(label).toLocaleDateString('en-US', { weekday: 'long' })}
+                                                    </span>
+                                                </>
+                                            )}
                                         </div>
                                         <div className="space-y-1">
                                             {sortedPayload.map((entry, index) => {
