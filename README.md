@@ -8,6 +8,12 @@ You can set personalized work and break intervals that match your rhythm and ene
 
 Cadence is lightweight, reliable, and intuitive. It never saves, sends, or uses any of your information for purposes other than its core functionality.
 
+## Install from Web Store
+
+- [Chrome Web Store](https://chromewebstore.google.com/detail/cadence-pomodoro-focus-ti/mjpanfloecbdhkpilhgkglonabikjadf)
+- [Firefox Add-Ons](https://addons.mozilla.org/en-US/firefox/addon/cadence-pomodoro-focus-timers/)
+- [Edge Add-Ons](https://microsoftedge.microsoft.com/addons/detail/cadence-pomodoro-focus-/lkgpghlmfjbmfjckgebegoclmklkhdml)
+
 ## Install Locally (Chrome)
 
 1. Download the latest .zip file version from [https://github.com/Thinkorswim/cadence/releases](https://github.com/Thinkorswim/cadence/releases)
@@ -16,7 +22,6 @@ Cadence is lightweight, reliable, and intuitive. It never saves, sends, or uses 
 4. Go to the extensions page: chrome://extensions
 5. Enable Developer Mode (toggle "Developer mode" at the top-right corner)
 6. Click Load unpacked and select/open the extension folder (contains file manifest.json).
-
 
 ## Developer setup
 
