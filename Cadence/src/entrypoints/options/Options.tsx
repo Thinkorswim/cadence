@@ -1737,7 +1737,9 @@ function Options() {
 
         <footer className="bg-muted rounded-t-lg py-5 px-8 mt-10">
           <div className="container mx-auto flex justify-between items-center text-xs">
-            <div className="flex items-center text-secondary font-semibold"> <img src="/images/gm_logo_red.svg" alt="Grounded Momentum Logo" className="w-6 h-6 mr-2" /> Grounded Momentum <Dot className='w-2 h-2 mx-1' /> 2026 </div>
+            <a href="https://groundedmomentum.com/" target="_blank" rel="noopener noreferrer" className="flex items-center text-secondary font-semibold transition-colors">
+              <img src="/images/gm_logo_red.svg" alt="Grounded Momentum Logo" className="w-6 h-6 mr-2" /> Grounded Momentum <Dot className='w-2 h-2 mx-1' /> 2026
+            </a>            
             {ctaProperty === 'discord' ? (
               <div className="flex items-center text-secondary font-semibold">
                 {ctaDiscordText}
