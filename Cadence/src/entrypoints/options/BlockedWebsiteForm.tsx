@@ -1,11 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { Info } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { validateURL, extractHostnameAndDomain } from '@/lib/utils';
-import { BlockedWebsites } from '@/entrypoints/models/BlockedWebsites';
+import { BlockedWebsites } from '@/models/BlockedWebsites';
+import { syncAddBlockedWebsite } from '@/lib/sync';
+import { User } from '@/models/User';
+import { loadUserFromStorage } from '@/lib/auth';
 
 interface BlockedWebsiteFormProps {
     callback?: () => void; // Generic optional callback
@@ -14,8 +17,19 @@ interface BlockedWebsiteFormProps {
 export const BlockedWebsiteForm: React.FC<BlockedWebsiteFormProps> = ({ callback }) => {
     const [websiteValue, setWebsiteValue] = useState("");
     const [isValidWebsite, setIsValidWebsite] = useState(true);
+    const [user, setUser] = useState<User>(new User());
 
     const websiteInputRef = useRef<HTMLInputElement | null>(null);
+
+    useEffect(() => {
+        const loadUser = async () => {
+            const loadedUser = await loadUserFromStorage();
+            if (loadedUser) {
+                setUser(loadedUser);
+            }
+        };
+        loadUser();
+    }, []);
 
     // Add the blocked website to storage
     const addBlockedWebsite = () => {
@@ -70,6 +84,9 @@ export const BlockedWebsiteForm: React.FC<BlockedWebsiteFormProps> = ({ callback
                 blockedWebsites.addWebsite(realUrl!);
 
                 browser.storage.local.set({ blockedWebsites: blockedWebsites.toJSON() }, () => {
+                    // Sync to backend if Pro user
+                    if (user.isPro) syncAddBlockedWebsite(realUrl!);
+                    
                     // Close the dialog
                     if (callback) {
                         callback();

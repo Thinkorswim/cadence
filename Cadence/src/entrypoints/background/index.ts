@@ -1,15 +1,16 @@
-import { Timer } from "lucide-react";
-import { TimerState } from "../models/TimerState";
-import { ChartType } from "../models/ChartType";
-import { BadgeDisplayFormat } from "../models/BadgeDisplayFormat";
+import { TimerState } from "@/models/TimerState";
+import { SessionStatus } from "@/models/SessionStatus";
+import { ChartType } from "@/models/ChartType";
+import { BadgeDisplayFormat } from "@/models/BadgeDisplayFormat";
 import { timeDisplayFormatBadge } from "@/lib/utils";
-import { DailyStats } from "../models/DailyStats";
-import { CompletedSession } from "../models/CompletedSession";
-import { HistoricalStats } from "../models/HistoricalStats";
-import { Session } from "../models/Session";
-import { Settings } from "../models/Settings";
-import { BlockedWebsites } from "../models/BlockedWebsites";
+import { DailyStats } from "@/models/DailyStats";
+import { CompletedSession } from "@/models/CompletedSession";
+import { HistoricalStats } from "@/models/HistoricalStats";
+import { Session } from "@/models/Session";
+import { Settings } from "@/models/Settings";
+import { BlockedWebsites } from "@/models/BlockedWebsites";
 import { extractHostnameAndDomain, isUrlBlocked } from "@/lib/utils";
+import { syncAddHistoricalDay, syncUpdateDailyStats } from "@/lib/sync";
 
 export default defineBackground(() => {
     // Offscreen document management
@@ -162,15 +163,16 @@ export default defineBackground(() => {
                 browser.storage.local.set({ historicalStats: new HistoricalStats().toJSON() });
             }
 
-            if (!data.session) {
+            if (!data.session || data.session.accumulatedTime === undefined) {
+                // Create new session or migrate from old format
                 const settings = data.settings ? Settings.fromJSON(data.settings) : null;
                 const defaultSession: Session = Session.fromJSON({
-                    elapsedTime: 0,
+                    accumulatedTime: 0,
                     timerState: TimerState.Focus,
                     totalTime: settings ? settings.focusTime : 25 * 60,
-                    isStopped: true,
-                    isPaused: false,
-                    timeStarted: new Date().toISOString(),
+                    status: SessionStatus.Stopped,
+                    createdAt: new Date().toISOString(),
+                    currentRunStartedAt: null,
                     project: settings ? settings.selectedProject : "General"
                 });
 
@@ -198,8 +200,13 @@ export default defineBackground(() => {
         browser.storage.local.get(["session"], (data) => {
             if (data.session) {
                 const session: Session = Session.fromJSON(data.session);
-                if (!session.isStopped && !session.isPaused) {
-                    session.isPaused = true;
+                // If session was running when browser closed, pause it
+                if (session.status === SessionStatus.Running) {
+                    // Accumulate elapsed time before pausing
+                    const now = new Date();
+                    session.accumulatedTime = session.getElapsedTime(now);
+                    session.currentRunStartedAt = null;
+                    session.status = SessionStatus.Paused;
                     browser.runtime.sendMessage({ action: "updateSession", session });
                     browser.storage.local.set({ session: session.toJSON() });
                 }
@@ -210,15 +217,15 @@ export default defineBackground(() => {
     const updateTime = () => {
         browser.storage.local.get(["session"], (data) => {
             let session: Session = Session.fromJSON(data.session);
+            const now = new Date();
+            
             if (session && session.timerState === TimerState.Focus) {
-                session.elapsedTime += 1;
-
-                // Check if the session has ended
-                if (session.elapsedTime >= session.totalTime) {
+                // Check if the session has ended using timestamp-based calculation
+                if (session.isComplete(now)) {
                     clearInterval(timer!);
                     timer = null;
 
-                    browser.storage.local.get(["dailyStats", "settings"], (data) => {
+                    browser.storage.local.get(["dailyStats", "settings", "user"], (data) => {
                         const settings: Settings = Settings.fromJSON(data.settings);
                         updateCachedSettings(settings);
                         const dailyStats: DailyStats = DailyStats.fromJSON(data.dailyStats);
@@ -238,7 +245,7 @@ export default defineBackground(() => {
 
                         const completedSession = CompletedSession.fromJSON({
                             totalTime: session.totalTime,
-                            timeStarted: session.timeStarted.toISOString(),
+                            timeStarted: session.createdAt.toISOString(),
                             timeEnded: new Date().toISOString(),
                             project: session.project || "General"
                         });
@@ -247,10 +254,18 @@ export default defineBackground(() => {
 
                             const dailyStatsSnapshot = DailyStats.fromJSON(dailyStats.toJSON());
 
-                            browser.storage.local.get(["historicalStats"], (data) => {
-                                const historicalStats = HistoricalStats.fromJSON(data.historicalStats);
+                            browser.storage.local.get(["historicalStats"], (historicalData) => {
+                                const historicalStats = HistoricalStats.fromJSON(historicalData.historicalStats);
                                 historicalStats.stats[dailyStatsSnapshot.date] = dailyStatsSnapshot.completedSessions ? dailyStatsSnapshot.completedSessions : [];
                                 browser.storage.local.set({ historicalStats: historicalStats.toJSON() });
+
+                                // Sync to server for Pro users
+                                if (data.user?.isPro) {
+                                    syncAddHistoricalDay(
+                                        dailyStatsSnapshot.date,
+                                        dailyStatsSnapshot.completedSessions?.map(s => s.toJSON()) || []
+                                    );
+                                }
                             });
 
                             dailyStats.date = new Date().toLocaleDateString('en-CA').slice(0, 10);
@@ -272,33 +287,38 @@ export default defineBackground(() => {
                             session.totalTime = settings.shortBreakTime;
                         }
 
-                        session.elapsedTime = 0;
-                        session.timeStarted = new Date();
+                        session.accumulatedTime = 0;
+                        session.createdAt = new Date();
 
                         if (settings.breakAutoStart) {
-                            session.isStopped = false;
+                            session.status = SessionStatus.Running;
+                            session.currentRunStartedAt = new Date();
                             setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "green");
                             timer = setInterval(() => updateTime(), 1000);
                         } else {
-                            session.isStopped = true;
+                            session.status = SessionStatus.Stopped;
+                            session.currentRunStartedAt = null;
                             setBadge("", "green");
                         }
 
                         browser.storage.local.set({ dailyStats: dailyStats.toJSON(), session: session.toJSON() });
+                        
+                        // Sync daily stats to server for Pro users
+                        if (data.user?.isPro) {
+                            syncUpdateDailyStats(dailyStats.toJSON());
+                        }
+                        
                         browser.runtime.sendMessage({ action: "updateSession", session });
                     });
 
                 } else {
-                    browser.storage.local.set({ session: session.toJSON() });
-
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "red");
+                    // Session still running - update badge with remaining time
+                    setBadge(timeDisplayFormatBadge(session.getRemainingTime(now), cachedBadgeDisplayFormat), "red");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             } else if (session && session.timerState === TimerState.ShortBreak) {
-                session.elapsedTime += 1;
-
                 // Check if the short break has ended
-                if (session.elapsedTime >= session.totalTime) {
+                if (session.isComplete(now)) {
                     clearInterval(timer!);
                     timer = null;
 
@@ -320,16 +340,18 @@ export default defineBackground(() => {
                             playNotificationSound(settings);
 
                             session.timerState = TimerState.Focus;
-                            session.elapsedTime = 0;
-                            session.timeStarted = new Date();
+                            session.accumulatedTime = 0;
+                            session.createdAt = new Date();
                             session.totalTime = settings.focusTime;
 
                             if (settings.focusAutoStart) {
-                                session.isStopped = false;
+                                session.status = SessionStatus.Running;
+                                session.currentRunStartedAt = new Date();
                                 timer = setInterval(() => updateTime(), 1000);
                                 setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
                             } else {
-                                session.isStopped = true;
+                                session.status = SessionStatus.Stopped;
+                                session.currentRunStartedAt = null;
                                 setBadge("", "red");
                             }
 
@@ -339,16 +361,13 @@ export default defineBackground(() => {
                     });
 
                 } else {
-                    browser.storage.local.set({ session: session.toJSON() });
-
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "green");
+                    // Break still running - update badge with remaining time
+                    setBadge(timeDisplayFormatBadge(session.getRemainingTime(now), cachedBadgeDisplayFormat), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             } else if (session && session.timerState === TimerState.LongBreak) {
-                session.elapsedTime += 1;
-
                 // Check if the long break has ended
-                if (session.elapsedTime >= session.totalTime) {
+                if (session.isComplete(now)) {
                     clearInterval(timer!);
                     timer = null;
 
@@ -370,16 +389,18 @@ export default defineBackground(() => {
                             playNotificationSound(settings);
 
                             session.timerState = TimerState.Focus;
-                            session.elapsedTime = 0;
-                            session.timeStarted = new Date();
+                            session.accumulatedTime = 0;
+                            session.createdAt = new Date();
                             session.totalTime = settings.focusTime;
 
                             if (settings.focusAutoStart) {
-                                session.isStopped = false;
+                                session.status = SessionStatus.Running;
+                                session.currentRunStartedAt = new Date();
                                 timer = setInterval(() => updateTime(), 1000);
                                 setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
                             } else {
-                                session.isStopped = true;
+                                session.status = SessionStatus.Stopped;
+                                session.currentRunStartedAt = null;
                                 setBadge("", "red");
                             }
 
@@ -389,9 +410,8 @@ export default defineBackground(() => {
                     });
 
                 } else {
-                    browser.storage.local.set({ session: session.toJSON() });
-
-                    setBadge(timeDisplayFormatBadge(session.totalTime - session.elapsedTime, cachedBadgeDisplayFormat), "green");
+                    // Long break still running - update badge with remaining time
+                    setBadge(timeDisplayFormatBadge(session.getRemainingTime(now), cachedBadgeDisplayFormat), "green");
                     browser.runtime.sendMessage({ action: "updateSession", session });
                 }
             }
@@ -410,29 +430,35 @@ export default defineBackground(() => {
                     switch (request.action) {
                         case "startTimer":
                             session.timerState = TimerState.Focus;
-                            session.timeStarted = new Date();
+                            session.createdAt = new Date();
                             session.totalTime = settings.focusTime;
-                            session.isStopped = false;
+                            session.accumulatedTime = 0;
+                            session.status = SessionStatus.Running;
+                            session.currentRunStartedAt = new Date();
 
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "pauseTimer":
-                            session.isPaused = true;
+                            // Accumulate elapsed time before pausing
+                            session.accumulatedTime = session.getElapsedTime(new Date());
+                            session.currentRunStartedAt = null;
+                            session.status = SessionStatus.Paused;
                             if (timer) {
                                 clearInterval(timer);
                                 timer = null;
                             }
                             break;
                         case "resumeTimer":
-                            session.isPaused = false;
+                            session.status = SessionStatus.Running;
+                            session.currentRunStartedAt = new Date();
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "stopTimer":
-                            session.isPaused = false;
-                            session.isStopped = true;
-                            session.elapsedTime = 0;
+                            session.status = SessionStatus.Stopped;
+                            session.currentRunStartedAt = null;
+                            session.accumulatedTime = 0;
                             session.timerState = TimerState.Focus;
-                            session.timeStarted = new Date();
+                            session.createdAt = new Date();
                             setBadge("", "red");
 
                             if (timer) {
@@ -442,25 +468,29 @@ export default defineBackground(() => {
                             break;
                         case "startShortBreak":
                             session.timerState = TimerState.ShortBreak;
-                            session.timeStarted = new Date();
+                            session.createdAt = new Date();
                             session.totalTime = settings.shortBreakTime;
-                            session.isStopped = false;
+                            session.accumulatedTime = 0;
+                            session.status = SessionStatus.Running;
+                            session.currentRunStartedAt = new Date();
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "startLongBreak":
                             session.timerState = TimerState.LongBreak;
-                            session.timeStarted = new Date();
+                            session.createdAt = new Date();
                             session.totalTime = settings.longBreakTime;
-                            session.isStopped = false;
+                            session.accumulatedTime = 0;
+                            session.status = SessionStatus.Running;
+                            session.currentRunStartedAt = new Date();
                             timer = setInterval(() => updateTime(), 1000);
                             break;
                         case "skipBreak":
                             session.timerState = TimerState.Focus;
-                            session.isPaused = false;
-                            session.elapsedTime = 0;
-                            session.timeStarted = new Date();
+                            session.status = SessionStatus.Stopped;
+                            session.currentRunStartedAt = null;
+                            session.accumulatedTime = 0;
+                            session.createdAt = new Date();
                             session.totalTime = settings.focusTime;
-                            session.isStopped = true;
                             setBadge("", "red");
                             if (timer) {
                                 clearInterval(timer);
@@ -526,7 +556,7 @@ export default defineBackground(() => {
             const blockedWebsites: BlockedWebsites = BlockedWebsites.fromJSON(data.blockedWebsites);
 
             // Only block during active focus sessions and if blocking is enabled
-            if (session.timerState !== TimerState.Focus || session.isStopped || session.isPaused || !blockedWebsites.enabled) {
+            if (session.timerState !== TimerState.Focus || session.status !== SessionStatus.Running || !blockedWebsites.enabled) {
                 return;
             }
 

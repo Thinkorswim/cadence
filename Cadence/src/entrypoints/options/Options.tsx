@@ -2,14 +2,14 @@ import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useCallback } from 'react';
-import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield } from 'lucide-react'
+import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield, Sparkles, CloudOff, CheckCircle2, RefreshCw } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
-import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { RoundSlider, ISettingsPointer } from 'mz-react-round-slider';
 import { Input } from '@/components/ui/input';
@@ -28,21 +28,24 @@ import {
 } from "@/components/ui/command"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { StatisticsChart } from './StatisticsChart';
-import { Settings } from '../models/Settings';
-import { BadgeDisplayFormat } from '../models/BadgeDisplayFormat';
-import { BlockedWebsites } from '../models/BlockedWebsites';
+import { Settings } from '@/models/Settings';
+import { BadgeDisplayFormat } from '@/models/BadgeDisplayFormat';
+import { BlockedWebsites } from '@/models/BlockedWebsites';
 import { BlockedWebsitesTable } from './BlockedWebsitesTable';
 import { BlockedWebsiteForm } from './BlockedWebsiteForm';
-import { Session } from '../models/Session';
-import { CompletedSession } from '../models/CompletedSession';
-import { TimerState } from '../models/TimerState';
-import { DailyStats } from '../models/DailyStats';
-import { HistoricalStats } from '../models/HistoricalStats';
-import { ChartType } from '../models/ChartType';
+import { Session } from '@/models/Session';
+import { CompletedSession } from '@/models/CompletedSession';
+import { TimerState } from '@/models/TimerState';
+import { DailyStats } from '@/models/DailyStats';
+import { HistoricalStats } from '@/models/HistoricalStats';
+import { ChartType } from '@/models/ChartType';
 import { ProjectsTable } from './ProjectsTable';
 import { SessionsTable } from './SessionsTable';
-import { ProjectUtils } from '@/lib/ProjectUtils';
-import { cn, generateColorFromString } from '@/lib/utils';
+import { GMPlus } from './GMPlus';
+import { ProjectUtils, cn, generateColorFromString } from '@/lib/utils';
+import { User } from '@/models/User';
+import { loadUserFromStorage } from '@/lib/auth';
+import { getSyncStatus, subscribeSyncStatus, syncAll, syncUpdateSettings, syncDeleteBlockedWebsite, syncToggleBlockedWebsites, syncAddHistoricalDay, syncUpdateDailyStats, fetchHistoricalStats, type SyncStatus } from '@/lib/sync';
 
 function Options() {
   const [ctaProperty, setCtaProperty] = useState<string>('');
@@ -126,6 +129,10 @@ function Options() {
   const [tabsPermissionGranted, setTabsPermissionGranted] = useState<boolean>(false);
   const [isAddWebsiteDialogOpen, setIsAddWebsiteDialogOpen] = useState(false);
 
+  // Sync state
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(getSyncStatus());
+  const [user, setUser] = useState<User>(new User());
+
   // Helper function to safely convert Date to datetime-local string
   const toDateTimeLocalString = (date: Date): string => {
     try {
@@ -167,6 +174,87 @@ function Options() {
       bgColorSelected: '#eee',
     }
   ]);
+
+  // Load user on mount
+  useEffect(() => {
+    const loadUser = async () => {
+      const loadedUser = await loadUserFromStorage();
+      if (loadedUser) {
+        setUser(loadedUser);
+      }
+    };
+    loadUser();
+
+    // Listen for user changes in storage (e.g., when user logs in)
+    const handleStorageChange = (changes: any, areaName: string) => {
+      if (areaName === 'local' && changes.user) {
+        const newUser = changes.user.newValue;
+        if (newUser) {
+          setUser(User.fromJSON(newUser));
+        } else {
+          setUser(new User());
+        }
+      }
+    };
+
+    browser.storage.onChanged.addListener(handleStorageChange);
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
+
+  // Subscribe to sync status changes and sync all data when settings page opens
+  useEffect(() => {
+    const unsubscribe = subscribeSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+
+    if (user.isPro && user.authToken) {
+      syncAll(user.authToken);
+    }
+
+    return unsubscribe;
+  }, [user.isPro, user.authToken]);
+
+  // Listen for storage changes to update UI when data is synced from backend
+  useEffect(() => {
+    const handleStorageChange = (changes: any, areaName: string) => {
+      if (areaName !== 'local') return;
+
+      // Update settings state when storage changes
+      if (changes.settings?.newValue) {
+        const settings = changes.settings.newValue;
+        setFocusAutoStart(settings.focusAutoStart);
+        setBreakAutoStart(settings.breakAutoStart);
+        setNotificationsEnabled(settings.notificationsEnabled ?? true);
+        setSoundEnabled(settings.soundEnabled ?? false);
+        setSoundVolume(settings.soundVolume ?? 0.7);
+        setFocusTime(settings.focusTime);
+        setBreakTime(settings.shortBreakTime);
+        setLongBreakTime(settings.longBreakTime || 15 * 60);
+        setLongBreakInterval(settings.longBreakInterval || 4);
+        setLongBreakEnabled(settings.longBreakEnabled || false);
+        setDailySessionsGoal(settings.dailySessionsGoal || 10);
+        setChartType(settings.preferredChartType || ChartType.Sessions);
+        setBadgeDisplayFormat(settings.badgeDisplayFormat || BadgeDisplayFormat.Minutes);
+        setProjects(settings.projects || ['General']);
+        setSelectedProject(settings.selectedProject || 'General');
+      }
+
+      // Update blocked websites state when storage changes
+      if (changes.blockedWebsites?.newValue) {
+        const websites = BlockedWebsites.fromJSON(changes.blockedWebsites.newValue);
+        setBlockedWebsites(websites);
+      }
+
+      // Update historical stats when storage changes
+      if (changes.historicalStats?.newValue) {
+        const stats = HistoricalStats.fromJSON(changes.historicalStats.newValue);
+        setHistoricalStats(stats);
+      }
+    };
+
+    browser.storage.onChanged.addListener(handleStorageChange);
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
+  }, []);
 
   useEffect(() => {
     // Select a random call to action on mount
@@ -263,22 +351,40 @@ function Options() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const section = params.get('section');
-    if (section && section == "statistics") {
-      setActiveTab("statistics");
-      handleStatisticsLoad();
+    if (section) {
+      if (section === "statistics") {
+        setActiveTab("statistics");
+        handleStatisticsLoad();
+      } else if (section === "gmplus") {
+        setActiveTab("gmplus");
+      } else {
+        setActiveTab(section);
+      }
     }
   }, []);
 
 
-  const handleStatisticsLoad = () => {
-    browser.storage.local.get(['dailyStats', 'historicalStats'], (data) => {
+  const handleStatisticsLoad = async () => {
+    browser.storage.local.get(['dailyStats', 'historicalStats', 'user'], async (data) => {
       const dailyStatistics: DailyStats = DailyStats.fromJSON(data.dailyStats) || new DailyStats();
-      const historicalStatsObj: HistoricalStats = HistoricalStats.fromJSON(data.historicalStats);
+      let historicalStatsObj: HistoricalStats = HistoricalStats.fromJSON(data.historicalStats);
 
       // Save completed sessions for the current date
       historicalStatsObj.stats[dailyStatistics.date] = dailyStatistics.completedSessions ? dailyStatistics.completedSessions : [];
 
-      browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
+      // Fetch historical stats from backend for Pro users
+      if (data.user?.isPro) {
+        const backendHistoricalStats = await fetchHistoricalStats();
+        if (backendHistoricalStats) {
+          // Merge backend data with local data (backend takes precedence for old days, local for today)
+          const mergedStats = { ...backendHistoricalStats };
+          mergedStats[dailyStatistics.date] = historicalStatsObj.stats[dailyStatistics.date];
+          historicalStatsObj = new HistoricalStats(mergedStats);
+          browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
+        }
+      } else {
+        browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
+      }
 
       setHistoricalStats(historicalStatsObj);
     });
@@ -297,6 +403,7 @@ function Options() {
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setFocusTimeDialogOpen(false);
+        if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
     });
   };
@@ -313,6 +420,7 @@ function Options() {
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setShortBreakDialogOpen(false);
+        if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
     });
   };
@@ -324,6 +432,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.focusAutoStart = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -333,6 +442,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.breakAutoStart = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -342,6 +452,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.notificationsEnabled = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -351,6 +462,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.soundEnabled = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -360,6 +472,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.soundVolume = volume;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -375,6 +488,7 @@ function Options() {
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
         setLongBreakTimeDialogOpen(false);
+        if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
     });
   };
@@ -385,6 +499,7 @@ function Options() {
       settings.longBreakInterval = longBreakInterval;
       browser.storage.local.set({ settings: settings.toJSON() }, () => {
         setLongBreakIntervalDialogOpen(false);
+        if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
     });
   };
@@ -395,6 +510,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.longBreakEnabled = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   };
 
@@ -404,6 +520,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.dailySessionsGoal = newGoal;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
@@ -413,12 +530,8 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.badgeDisplayFormat = format;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
-  }
-
-  const handleBadgeDisplayFormatStringChange = (value: string) => {
-    const format = value as BadgeDisplayFormat;
-    handleBadgeDisplayFormatChange(format);
   }
 
   const addProject = () => {
@@ -445,6 +558,7 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings);
       settings.projects = updatedProjects;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
 
     setNewProjectName('');
@@ -463,6 +577,7 @@ function Options() {
       settings.projects = result.projects;
       settings.selectedProject = result.selectedProject;
       browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   };
 
@@ -497,9 +612,17 @@ function Options() {
           historicalStats: newHistoricalStats.toJSON(),
           dailyStats: dailyStats.toJSON()
         });
+        
+        // Sync daily stats for Pro users
+        if (user.isPro) syncUpdateDailyStats(dailyStats.toJSON());
       });
     } else {
       browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+      
+      // Sync the affected day for Pro users (incremental sync)
+      if (user.isPro) {
+        syncAddHistoricalDay(date, updatedStats[date]?.map(s => s.toJSON()) || []);
+      }
     }
   };
 
@@ -553,56 +676,72 @@ function Options() {
       project: editingSession.project
     })
 
-    const updatedStats = { ...historicalStats.stats };
     const sessionDate = updatedSession.timeEnded.toLocaleDateString('en-CA').slice(0, 10); // Get YYYY-MM-DD format
     const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
 
-    if (selectedSessionDate === '') {
-      // Adding new session
-      if (!updatedStats[sessionDate]) {
-        updatedStats[sessionDate] = [];
-      }
-      updatedStats[sessionDate].push(updatedSession);
-    } else {
-      // Editing existing session
-      if (updatedStats[selectedSessionDate] && selectedSessionIndex >= 0) {
-        if (selectedSessionDate !== sessionDate) {
-          updatedStats[selectedSessionDate] = updatedStats[selectedSessionDate].filter((_, index) => index !== selectedSessionIndex);
-          if (updatedStats[selectedSessionDate].length === 0) {
-            delete updatedStats[selectedSessionDate];
-          }
-          if (!updatedStats[sessionDate]) {
-            updatedStats[sessionDate] = [];
-          }
-          updatedStats[sessionDate].push(updatedSession);
-        } else {
-          updatedStats[selectedSessionDate][selectedSessionIndex] = updatedSession;
-        }
-      }
-    }
-
-    const newHistoricalStats = new HistoricalStats(updatedStats);
-    setHistoricalStats(newHistoricalStats);
-
-    // If the session is for today, also update dailyStats
     if (sessionDate === today) {
+      // Session is for today - update dailyStats
       browser.storage.local.get(['dailyStats'], (data) => {
         const dailyStats = DailyStats.fromJSON(data.dailyStats || {
           date: today,
           completedSessions: []
         });
 
-        // Update dailyStats with today's sessions from historicalStats
-        dailyStats.date = today;
-        dailyStats.completedSessions = updatedStats[today] || [];
+        if (selectedSessionDate === '') {
+          // Adding new session for today
+          dailyStats.completedSessions.push(updatedSession);
+        } else if (selectedSessionDate === today && selectedSessionIndex >= 0) {
+          // Editing existing session for today
+          dailyStats.completedSessions[selectedSessionIndex] = updatedSession;
+        }
 
-        browser.storage.local.set({
-          historicalStats: newHistoricalStats.toJSON(),
-          dailyStats: dailyStats.toJSON()
-        });
+        browser.storage.local.set({ dailyStats: dailyStats.toJSON() });
+        
+        // Sync daily stats for Pro users
+        if (user.isPro) syncUpdateDailyStats(dailyStats.toJSON());
       });
     } else {
+      // Session is for a previous day - update historicalStats
+      const updatedStats = { ...historicalStats.stats };
+
+      if (selectedSessionDate === '') {
+        // Adding new session for previous day
+        if (!updatedStats[sessionDate]) {
+          updatedStats[sessionDate] = [];
+        }
+        updatedStats[sessionDate].push(updatedSession);
+      } else {
+        // Editing existing session
+        if (updatedStats[selectedSessionDate] && selectedSessionIndex >= 0) {
+          if (selectedSessionDate !== sessionDate) {
+            // Session date changed
+            updatedStats[selectedSessionDate] = updatedStats[selectedSessionDate].filter((_, index) => index !== selectedSessionIndex);
+            if (updatedStats[selectedSessionDate].length === 0) {
+              delete updatedStats[selectedSessionDate];
+            }
+            if (!updatedStats[sessionDate]) {
+              updatedStats[sessionDate] = [];
+            }
+            updatedStats[sessionDate].push(updatedSession);
+          } else {
+            // Same date
+            updatedStats[selectedSessionDate][selectedSessionIndex] = updatedSession;
+          }
+        }
+      }
+
+      const newHistoricalStats = new HistoricalStats(updatedStats);
+      setHistoricalStats(newHistoricalStats);
       browser.storage.local.set({ historicalStats: newHistoricalStats.toJSON() });
+      
+      // Sync only the affected day for Pro users (incremental sync)
+      if (user.isPro) {
+        syncAddHistoricalDay(sessionDate, updatedStats[sessionDate].map(s => s.toJSON()));
+        // If date changed and old date is now empty, we could sync deletion but backend handles empty arrays
+        if (selectedSessionDate !== sessionDate && selectedSessionDate !== '' && !updatedStats[selectedSessionDate]) {
+          syncAddHistoricalDay(selectedSessionDate, []);
+        }
+      }
     }
 
     setEditSessionDialogOpen(false);
@@ -652,6 +791,8 @@ function Options() {
     browser.storage.local.set({
       blockedWebsites: updatedBlockedWebsites.toJSON()
     });
+
+    if (user.isPro) syncDeleteBlockedWebsite(websiteName);
   };
 
   const handleDialogClose = () => {
@@ -676,6 +817,7 @@ function Options() {
             blockedWebsites: updatedBlockedWebsites.toJSON()
           });
           loadBlockedWebsites();
+          if (user.isPro) syncToggleBlockedWebsites(true);
         }
         // If permission denied, the switch will remain unchecked
       });
@@ -692,7 +834,17 @@ function Options() {
       browser.storage.local.set({
         blockedWebsites: updatedBlockedWebsites.toJSON()
       });
+
+      if (user.isPro) syncToggleBlockedWebsites(checked);
     }
+  };
+
+  const handleForceSync = async () => {
+    if (!user.isPro || !user.authToken) {
+      return;
+    }
+
+    await syncAll(user.authToken);
   };
 
 
@@ -710,7 +862,49 @@ function Options() {
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="sessions" onClick={handleStatisticsLoad}><Clock className='w-5 h-5 mr-1' /> Sessions </TabsTrigger>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="blocked-websites"><Shield className='w-5 h-5 mr-1' /> Blocked Sites</TabsTrigger>
                 <TabsTrigger className='data-[state=active]:shadow-none text-foreground' value="settings" ><SettingsIcon className='w-5 h-5 mr-1' />  Settings</TabsTrigger>
+                <TabsTrigger className='data-[state=active]:shadow-none ml-1 bg-gradient-to-r from-chart-1 to-chart-2 text-white data-[state=active]:text-white transition-all duration-100 hover:scale-105' value="gmplus" ><Sparkles className='w-5 h-5 mr-1' />  GM Plus</TabsTrigger>
               </TabsList>
+              {/* Sync status indicator - only show for Pro users */}
+              {user.isPro && (
+                <div className="flex items-center space-x-3 ml-4">
+                  <div className="flex items-center space-x-2 text-sm text-muted-foreground">
+                    {syncStatus === "idle" && (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Synced</span>
+                      </>
+                    )}
+                    {syncStatus === "syncing" && (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-pulse" />
+                        <span>Syncing...</span>
+                      </>
+                    )}
+                    {syncStatus === "success" && (
+                      <>
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Synced</span>
+                      </>
+                    )}
+                    {syncStatus === "error" && (
+                      <>
+                        <CloudOff className="w-4 h-4 text-destructive" />
+                        <span className="text-destructive">Sync failed</span>
+                      </>
+                    )}
+                  </div>
+                  <Button
+                    onClick={handleForceSync}
+                    disabled={syncStatus === "syncing"}
+                    size="sm"
+                    variant="outline"
+                    className="h-8 hover:bg-muted/50 transition-colors shadow-none border-muted-foreground/50 text-muted-foreground"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                    Sync Now
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* STATISTICS TAB */}
@@ -1182,6 +1376,11 @@ function Options() {
                   </div>
                 </div>
               </div>
+            </TabsContent>
+
+            {/* GM PLUS TAB */}
+            <TabsContent value="gmplus">
+              <GMPlus />
             </TabsContent>
           </Tabs>
         </div >

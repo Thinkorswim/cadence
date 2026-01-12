@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { CompletedSession } from '../models/CompletedSession';
-import { HistoricalStats } from '../models/HistoricalStats';
+import { CompletedSession } from '@/models/CompletedSession';
+import { HistoricalStats } from '@/models/HistoricalStats';
 import { timeDisplayFormatBadge, generateColorFromString } from '@/lib/utils';
 import {
     Table,

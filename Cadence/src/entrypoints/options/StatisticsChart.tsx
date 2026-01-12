@@ -34,9 +34,9 @@ import {
 } from "@/components/ui/command"
 import { Check, ChevronsUpDown } from "lucide-react"
 
-import { HistoricalStats } from '../models/HistoricalStats';
-import { ChartType } from '../models/ChartType';
-import { Settings } from '../models/Settings';
+import { HistoricalStats } from '@/models/HistoricalStats';
+import { ChartType } from '@/models/ChartType';
+import { Settings } from '@/models/Settings';
 
 type StatisticsChartProps = {
     historicalStats: HistoricalStats,

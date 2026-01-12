@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import './style.css';
 import '~/assets/global.css';
-import { Cog, ChartNoAxesColumn, Play, Pause, StopCircle, Square, FastForward, ChevronsUpDown, Check, Plus } from 'lucide-react'
+import { Cog, ChartNoAxesColumn, Play, Pause, StopCircle, Square, FastForward, ChevronsUpDown, Check, Plus, Sparkles } from 'lucide-react'
 import {
   Label,
   PolarGrid,
@@ -26,11 +26,13 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Session } from '../models/Session';
-import { TimerState } from '../models/TimerState';
-import { Settings } from '../models/Settings';
-import { DailyStats } from '../models/DailyStats';
-import { HistoricalStats } from '../models/HistoricalStats';
+import { Session } from '@/models/Session';
+import { SessionStatus } from '@/models/SessionStatus';
+import { TimerState } from '@/models/TimerState';
+import { Settings } from '@/models/Settings';
+import { DailyStats } from '@/models/DailyStats';
+import { HistoricalStats } from '@/models/HistoricalStats';
+import { syncAll } from '@/lib/sync';
 
 const chartConfig = {
   progress: {
@@ -63,6 +65,7 @@ function Popup() {
   const [projects, setProjects] = useState([
     { value: "General", label: "General" }
   ])
+  const [isProUser, setIsProUser] = useState(false)
 
   const openStatisticsPage = () => {
     const url = browser.runtime.getURL('/options.html?section=statistics');
@@ -85,13 +88,22 @@ function Popup() {
   }
 
   useEffect(() => {
-    browser.storage.local.get(["session", "settings", "dailyStats"], (data) => {
+    browser.storage.local.get(["session", "settings", "dailyStats", "user"], (data) => {
+      // Set Pro user status and trigger sync
+      if (data.user?.isPro) {
+        setIsProUser(true);
+        if (data.user?.authToken) {
+          syncAll(data.user.authToken);
+        }
+      }
+      
       if (data.session) {
         const sessionData: Session = Session.fromJSON(data.session);
         setSession(sessionData);
-        setTimerTime(sessionData.totalTime - sessionData.elapsedTime);
+        const remainingTime = sessionData.getRemainingTime();
+        setTimerTime(remainingTime);
         setStartAngle(90);
-        setEndAngle(90 + (360 * (sessionData.totalTime - sessionData.elapsedTime)) / sessionData.totalTime);
+        setEndAngle(90 + (360 * remainingTime) / sessionData.totalTime);
         setSelectedProject(sessionData.project || "General");
       }
       
@@ -137,11 +149,14 @@ function Popup() {
   useEffect(() => {
     const handleMessage = (message: any) => {
       if (message.action === "updateSession") {
-        setSession(message.session);
-        setTimerTime(message.session.totalTime - message.session.elapsedTime);
+        // Reconstruct the Session instance to have access to methods
+        const sessionData = Session.fromJSON(message.session);
+        setSession(sessionData);
+        const remainingTime = sessionData.getRemainingTime();
+        setTimerTime(remainingTime);
         setStartAngle(90);
-        setEndAngle(90 + (360 * (message.session.totalTime - message.session.elapsedTime)) / message.session.totalTime);
-        setSelectedProject(message.session.project || "General");
+        setEndAngle(90 + (360 * remainingTime) / sessionData.totalTime);
+        setSelectedProject(sessionData.project || "General");
         
         // Update completed sessions count when session updates
         browser.storage.local.get(["dailyStats"], (data) => {
@@ -174,6 +189,29 @@ function Popup() {
             Cadence
           </div>
         </div>
+        {isProUser ? (
+          <span
+            onClick={() => {
+              const url = browser.runtime.getURL('/options.html?section=gmplus');
+              browser.tabs.create({ url });
+            }}
+            className="mr-2 cursor-pointer w-24 px-2 text-center bg-gradient-to-r from-chart-1 to-chart-2 py-0.5 text-xs  text-white border-primary/50 rounded-full font-semibold flex items-center justify-center transition-all duration-100 hover:scale-105"
+          >
+            <Sparkles className="inline-block w-3 h-3 mr-1" />
+            Plus
+          </span>
+        ) : (
+          <span
+            onClick={() => {
+              const url = browser.runtime.getURL('/options.html?section=gmplus');
+              browser.tabs.create({ url });
+            }}
+            className="mr-2 cursor-pointer w-38 px-1.5 text-center bg-gradient-to-r from-chart-1 to-chart-2 py-0.5 text-xs  text-white border-primary/50 rounded-full font-semibold flex items-center justify-center transition-all duration-100 hover:scale-105"
+          >
+            <Sparkles className="inline-block w-3 h-3 mr-1" />
+            Get Plus
+          </span>
+        )}
         <div className='flex items-center justify-end'>
           <ChartNoAxesColumn className='w-5 h-5 text-primary cursor-pointer mr-2' onClick={openStatisticsPage} />
           <Cog className='w-5 h-5 text-primary cursor-pointer' onClick={() => browser.runtime.openOptionsPage()} />
@@ -315,7 +353,7 @@ function Popup() {
       </ChartContainer>
 
       <div className="flex justify-center pb-8 mt-4">
-        {session?.isStopped && session?.timerState === TimerState.Focus && (
+        {session?.status === SessionStatus.Stopped && session?.timerState === TimerState.Focus && (
           <Button
             className="w-36 py-5 text-lg font-semibold"
             onClick={() => {
@@ -332,7 +370,7 @@ function Popup() {
             </div>
           </Button>
         )}
-        {!session?.isStopped && !session?.isPaused && (
+        {session?.status === SessionStatus.Running && (
           <Button
             className={cn(
               "w-36 py-5 text-lg font-semibold",
@@ -354,7 +392,7 @@ function Popup() {
             </div>
           </Button>
         )}
-        {session?.isPaused && session.timerState === TimerState.Focus && (
+        {session?.status === SessionStatus.Paused && session.timerState === TimerState.Focus && (
           <div className="flex flex-row items-center gap-2">
             <Button
               className="w-30 py-5 text-lg font-semibold"
@@ -390,7 +428,7 @@ function Popup() {
           </div>
         )}
 
-        {session?.isPaused && (session.timerState === TimerState.ShortBreak || session.timerState === TimerState.LongBreak) && (
+        {session?.status === SessionStatus.Paused && (session.timerState === TimerState.ShortBreak || session.timerState === TimerState.LongBreak) && (
           <div className="flex flex-row items-center gap-2">
             <Button
               className="w-30 py-5 text-lg font-semibold bg-green hover:bg-green/90"
@@ -425,7 +463,7 @@ function Popup() {
           </div>
         )}
 
-        {(session?.timerState === TimerState.ShortBreak || session?.timerState === TimerState.LongBreak) && session?.isStopped && (
+        {(session?.timerState === TimerState.ShortBreak || session?.timerState === TimerState.LongBreak) && session?.status === SessionStatus.Stopped && (
           <div className="flex flex-row items-center gap-2">
             <Button
               className="w-30 py-5 text-lg font-semibold bg-green hover:bg-green/90"
@@ -476,13 +514,13 @@ function Popup() {
                 {Array.from({ length: Math.min(5, dailySessionsGoal - rowIndex * 5) }, (_, colIndex) => {
                     const sessionIndex = rowIndex * 5 + colIndex;
                     const isCompleted = sessionIndex < completedSessions;
-                    const isCurrentSession = sessionIndex === completedSessions && !session?.isStopped && session?.timerState === TimerState.Focus;
+                    const isCurrentSession = sessionIndex === completedSessions && session?.status === SessionStatus.Running && session?.timerState === TimerState.Focus;
                     const isLastCompleted = sessionIndex === completedSessions - 1;
                     const isLastCircle = sessionIndex === dailySessionsGoal - 1;
                     
                     if (isCurrentSession) {
                       // Progressive circle fill for current focus session
-                      const progress = session ? (session.elapsedTime / session.totalTime) : 0;
+                      const progress = session ? (session.getElapsedTime() / session.totalTime) : 0;
                       const progressPercentage = Math.max(5, Math.min(95, progress * 100)); 
                       
                       return (
