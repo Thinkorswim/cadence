@@ -103,7 +103,7 @@ function Popup() {
         const remainingTime = sessionData.getRemainingTime();
         setTimerTime(remainingTime);
         setStartAngle(90);
-        setEndAngle(90 + (360 * remainingTime) / sessionData.totalTime);
+        setEndAngle(90 + (360 * remainingTime) / sessionData.getTotalTimeForCurrentState());
         setSelectedProject(sessionData.project || "General");
       }
       
@@ -155,7 +155,7 @@ function Popup() {
         const remainingTime = sessionData.getRemainingTime();
         setTimerTime(remainingTime);
         setStartAngle(90);
-        setEndAngle(90 + (360 * remainingTime) / sessionData.totalTime);
+        setEndAngle(90 + (360 * remainingTime) / sessionData.getTotalTimeForCurrentState());
         setSelectedProject(sessionData.project || "General");
         
         // Update completed sessions count when session updates
@@ -520,7 +520,7 @@ function Popup() {
                     
                     if (isCurrentSession) {
                       // Progressive circle fill for current focus session
-                      const progress = session ? (session.getElapsedTime() / session.totalTime) : 0;
+                      const progress = session ? (session.getElapsedTime() / session.getTotalTimeForCurrentState()) : 0;
                       const progressPercentage = Math.max(5, Math.min(95, progress * 100)); 
                       
                       return (

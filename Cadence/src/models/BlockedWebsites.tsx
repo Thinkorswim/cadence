@@ -61,10 +61,18 @@ export class BlockedWebsites {
 
   // Deserialize plain object to class instance
   static fromJSON(json: {
-    websites?: string[];
+    websites?: string[] | Set<string>;
     enabled?: boolean;
   }): BlockedWebsites {
-    const websites = new Set(json.websites || []);
+    // Handle both array and Set formats
+    let websitesArray: string[] = [];
+    if (json.websites instanceof Set) {
+      websitesArray = Array.from(json.websites);
+    } else if (Array.isArray(json.websites)) {
+      websitesArray = json.websites;
+    }
+    
+    const websites = new Set(websitesArray);
     return new BlockedWebsites(
       websites,
       json.enabled || false

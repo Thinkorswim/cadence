@@ -4,12 +4,14 @@ import { SessionStatus } from "./SessionStatus";
 export class Session {
   constructor(
     public accumulatedTime: number = 0, // Time accumulated in seconds before current run
-    public totalTime: number = 0, // Total time for the session in seconds
     public createdAt: Date = new Date(), // When the session was created
     public currentRunStartedAt: Date | null = null, // When the current run started (null if not running)
     public timerState: TimerState = TimerState.Focus, // Current state of the timer
     public status: SessionStatus = SessionStatus.Stopped, // Session status
-    public project: string = "General" // Project name for this session
+    public project: string = "General", // Project name for this session
+    public focusDuration: number = 25 * 60, // Focus duration in seconds (default 25 minutes)
+    public shortBreakDuration: number = 5 * 60, // Short break duration in seconds (default 5 minutes)
+    public longBreakDuration: number = 15 * 60 // Long break duration in seconds (default 15 minutes)
   ) { }
 
   /**
@@ -25,56 +27,81 @@ export class Session {
   }
 
   /**
-   * Get the remaining time for this session.
+   * Get the remaining time for the current timer state.
    */
   getRemainingTime(now: Date = new Date()): number {
-    return Math.max(0, this.totalTime - this.getElapsedTime(now));
+    const totalTime = this.getTotalTimeForCurrentState();
+    return Math.max(0, totalTime - this.getElapsedTime(now));
   }
 
   /**
-   * Check if the session timer has completed.
+   * Get the total time for the current timer state.
+   */
+  getTotalTimeForCurrentState(): number {
+    switch (this.timerState) {
+      case TimerState.Focus:
+        return this.focusDuration;
+      case TimerState.ShortBreak:
+        return this.shortBreakDuration;
+      case TimerState.LongBreak:
+        return this.longBreakDuration;
+      default:
+        return this.focusDuration;
+    }
+  }
+
+  /**
+   * Check if the current timer state has completed.
    */
   isComplete(now: Date = new Date()): boolean {
-    return this.getElapsedTime(now) >= this.totalTime;
+    return this.getElapsedTime(now) >= this.getTotalTimeForCurrentState();
   }
 
   toJSON(): {
     accumulatedTime: number;
-    totalTime: number;
     createdAt: string;
     currentRunStartedAt: string | null;
     timerState: TimerState;
     status: SessionStatus;
     project: string;
+    focusDuration: number;
+    shortBreakDuration: number;
+    longBreakDuration: number;
   } {
     return {
       accumulatedTime: this.accumulatedTime,
-      totalTime: this.totalTime,
       createdAt: this.createdAt.toISOString(),
       currentRunStartedAt: this.currentRunStartedAt?.toISOString() ?? null,
       timerState: this.timerState,
       status: this.status,
       project: this.project,
+      focusDuration: this.focusDuration,
+      shortBreakDuration: this.shortBreakDuration,
+      longBreakDuration: this.longBreakDuration,
     };
   }
 
   static fromJSON(json: {
     accumulatedTime: number;
-    totalTime: number;
     createdAt: string;
     currentRunStartedAt: string | null;
     timerState: TimerState;
     status: SessionStatus;
     project?: string;
+    focusDuration?: number;
+    shortBreakDuration?: number;
+    longBreakDuration?: number;
   }): Session {
     return new Session(
       json.accumulatedTime,
-      json.totalTime,
       new Date(json.createdAt),
       json.currentRunStartedAt ? new Date(json.currentRunStartedAt) : null,
       json.timerState,
       json.status,
-      json.project ?? "General"
+      json.project ?? "General",
+      json.focusDuration ?? 25 * 60,
+      json.shortBreakDuration ?? 5 * 60,
+      json.longBreakDuration ?? 15 * 60
     );
   }
 }

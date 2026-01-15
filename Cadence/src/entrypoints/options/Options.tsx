@@ -398,7 +398,7 @@ function Options() {
 
       settings.focusTime = focusTime;
       if (session.timerState === TimerState.Focus) {
-        session.totalTime = focusTime;
+        session.focusDuration = focusTime;
       }
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
@@ -415,7 +415,7 @@ function Options() {
 
       settings.shortBreakTime = breakTime;
       if (session.timerState === TimerState.ShortBreak) {
-        session.totalTime = breakTime;
+        session.shortBreakDuration = breakTime;
       }
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
@@ -483,7 +483,7 @@ function Options() {
 
       settings.longBreakTime = longBreakTime;
       if (session.timerState === TimerState.LongBreak) {
-        session.totalTime = longBreakTime;
+        session.longBreakDuration = longBreakTime;
       }
 
       browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {

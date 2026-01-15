@@ -163,20 +163,40 @@ export default defineBackground(() => {
                 browser.storage.local.set({ historicalStats: new HistoricalStats().toJSON() });
             }
 
+            // Migrate old session format or create new session
             if (!data.session || data.session.accumulatedTime === undefined) {
-                // Create new session or migrate from old format
+                // Create new session
                 const settings = data.settings ? Settings.fromJSON(data.settings) : null;
                 const defaultSession: Session = Session.fromJSON({
                     accumulatedTime: 0,
                     timerState: TimerState.Focus,
-                    totalTime: settings ? settings.focusTime : 25 * 60,
                     status: SessionStatus.Stopped,
                     createdAt: new Date().toISOString(),
                     currentRunStartedAt: null,
-                    project: settings ? settings.selectedProject : "General"
+                    project: settings ? settings.selectedProject : "General",
+                    focusDuration: settings ? settings.focusTime : 25 * 60,
+                    shortBreakDuration: settings ? settings.shortBreakTime : 5 * 60,
+                    longBreakDuration: settings ? settings.longBreakTime : 15 * 60
                 });
 
                 browser.storage.local.set({ session: defaultSession.toJSON() });
+            } else if (data.session.totalTime !== undefined && data.session.focusDuration === undefined) {
+                // Migrate from old format (has totalTime) to new format (has duration properties)
+                const settings = data.settings ? Settings.fromJSON(data.settings) : null;
+                const oldSession = data.session;
+                const migratedSession: Session = Session.fromJSON({
+                    accumulatedTime: oldSession.accumulatedTime || 0,
+                    timerState: oldSession.timerState || TimerState.Focus,
+                    status: oldSession.status || SessionStatus.Stopped,
+                    createdAt: oldSession.createdAt || new Date().toISOString(),
+                    currentRunStartedAt: oldSession.currentRunStartedAt || null,
+                    project: oldSession.project || "General",
+                    focusDuration: settings ? settings.focusTime : 25 * 60,
+                    shortBreakDuration: settings ? settings.shortBreakTime : 5 * 60,
+                    longBreakDuration: settings ? settings.longBreakTime : 15 * 60
+                });
+
+                browser.storage.local.set({ session: migratedSession.toJSON() });
             }
 
             if (!data.blockedWebsites) {
@@ -244,7 +264,7 @@ export default defineBackground(() => {
                         playNotificationSound(settings);
 
                         const completedSession = CompletedSession.fromJSON({
-                            totalTime: session.totalTime,
+                            totalTime: session.getTotalTimeForCurrentState(),
                             timeStarted: session.createdAt.toISOString(),
                             timeEnded: new Date().toISOString(),
                             project: session.project || "General"
@@ -281,10 +301,10 @@ export default defineBackground(() => {
 
                         if (shouldTakeLongBreak) {
                             session.timerState = TimerState.LongBreak;
-                            session.totalTime = settings.longBreakTime;
+                            session.longBreakDuration = settings.longBreakTime;
                         } else {
                             session.timerState = TimerState.ShortBreak;
-                            session.totalTime = settings.shortBreakTime;
+                            session.shortBreakDuration = settings.shortBreakTime;
                         }
 
                         session.accumulatedTime = 0;
@@ -293,7 +313,7 @@ export default defineBackground(() => {
                         if (settings.breakAutoStart) {
                             session.status = SessionStatus.Running;
                             session.currentRunStartedAt = new Date();
-                            setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "green");
+                            setBadge(timeDisplayFormatBadge(session.getTotalTimeForCurrentState(), settings.badgeDisplayFormat), "green");
                             timer = setInterval(() => updateTime(), 1000);
                         } else {
                             session.status = SessionStatus.Stopped;
@@ -342,13 +362,13 @@ export default defineBackground(() => {
                             session.timerState = TimerState.Focus;
                             session.accumulatedTime = 0;
                             session.createdAt = new Date();
-                            session.totalTime = settings.focusTime;
+                            session.focusDuration = settings.focusTime;
 
                             if (settings.focusAutoStart) {
                                 session.status = SessionStatus.Running;
                                 session.currentRunStartedAt = new Date();
                                 timer = setInterval(() => updateTime(), 1000);
-                                setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
+                                setBadge(timeDisplayFormatBadge(session.getTotalTimeForCurrentState(), settings.badgeDisplayFormat), "red");
                             } else {
                                 session.status = SessionStatus.Stopped;
                                 session.currentRunStartedAt = null;
@@ -391,13 +411,13 @@ export default defineBackground(() => {
                             session.timerState = TimerState.Focus;
                             session.accumulatedTime = 0;
                             session.createdAt = new Date();
-                            session.totalTime = settings.focusTime;
+                            session.focusDuration = settings.focusTime;
 
                             if (settings.focusAutoStart) {
                                 session.status = SessionStatus.Running;
                                 session.currentRunStartedAt = new Date();
                                 timer = setInterval(() => updateTime(), 1000);
-                                setBadge(timeDisplayFormatBadge(session.totalTime, settings.badgeDisplayFormat), "red");
+                                setBadge(timeDisplayFormatBadge(session.getTotalTimeForCurrentState(), settings.badgeDisplayFormat), "red");
                             } else {
                                 session.status = SessionStatus.Stopped;
                                 session.currentRunStartedAt = null;
@@ -431,7 +451,9 @@ export default defineBackground(() => {
                         case "startTimer":
                             session.timerState = TimerState.Focus;
                             session.createdAt = new Date();
-                            session.totalTime = settings.focusTime;
+                            session.focusDuration = settings.focusTime;
+                            session.shortBreakDuration = settings.shortBreakTime;
+                            session.longBreakDuration = settings.longBreakTime;
                             session.accumulatedTime = 0;
                             session.status = SessionStatus.Running;
                             session.currentRunStartedAt = new Date();
@@ -469,7 +491,9 @@ export default defineBackground(() => {
                         case "startShortBreak":
                             session.timerState = TimerState.ShortBreak;
                             session.createdAt = new Date();
-                            session.totalTime = settings.shortBreakTime;
+                            session.focusDuration = settings.focusTime;
+                            session.shortBreakDuration = settings.shortBreakTime;
+                            session.longBreakDuration = settings.longBreakTime;
                             session.accumulatedTime = 0;
                             session.status = SessionStatus.Running;
                             session.currentRunStartedAt = new Date();
@@ -478,7 +502,9 @@ export default defineBackground(() => {
                         case "startLongBreak":
                             session.timerState = TimerState.LongBreak;
                             session.createdAt = new Date();
-                            session.totalTime = settings.longBreakTime;
+                            session.focusDuration = settings.focusTime;
+                            session.shortBreakDuration = settings.shortBreakTime;
+                            session.longBreakDuration = settings.longBreakTime;
                             session.accumulatedTime = 0;
                             session.status = SessionStatus.Running;
                             session.currentRunStartedAt = new Date();
@@ -490,7 +516,9 @@ export default defineBackground(() => {
                             session.currentRunStartedAt = null;
                             session.accumulatedTime = 0;
                             session.createdAt = new Date();
-                            session.totalTime = settings.focusTime;
+                            session.focusDuration = settings.focusTime;
+                            session.shortBreakDuration = settings.shortBreakTime;
+                            session.longBreakDuration = settings.longBreakTime;
                             setBadge("", "red");
                             if (timer) {
                                 clearInterval(timer);
