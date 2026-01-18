@@ -149,6 +149,41 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
   for (const mapping of SYNC_FIELD_MAPPINGS) {
     const value = backendData[mapping.backendKey];
     if (value !== undefined) {
+      // Special handling for dailyStats - check if the date is old
+      if (mapping.localKey === 'dailyStats' && value?.date) {
+        const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
+        
+        if (value.date !== today) {
+          // Move old stats to historical
+          if (value.completedSessions && value.completedSessions.length > 0) {
+            const localData = await browser.storage.local.get(['historicalStats']);
+            const historicalStats = localData.historicalStats || { stats: {} };
+            historicalStats.stats[value.date] = value.completedSessions;
+            localUpdates.historicalStats = historicalStats;
+            
+            // Sync the historical update to backend
+            await makeSyncRequest('/api/cadence/historical-day', 'POST', {
+              date: value.date,
+              completedSessions: value.completedSessions
+            }, 'Error syncing historical day');
+          }
+          
+          // Create fresh dailyStats for today
+          localUpdates.dailyStats = {
+            date: today,
+            completedSessions: []
+          };
+          
+          // Update backend with today's empty stats
+          await makeSyncRequest('/api/cadence/daily-stats', 'PUT', {
+            date: today,
+            completedSessions: []
+          }, 'Error syncing updated daily stats');
+          
+          continue; // Skip the normal mapping logic
+        }
+      }
+      
       localUpdates[mapping.localKey] = mapping.transform?.toLocal
         ? mapping.transform.toLocal(value)
         : value;

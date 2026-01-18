@@ -22,7 +22,7 @@ export default defineConfig({
     } else {
       // Firefox MV2
       return {
-        permissions: ["storage", "*://www.instagram.com/*"],
+        permissions: ["storage", "notifications"],
         optional_permissions: ["tabs", "https://api.groundedmomentum.com/*"],
         commands: {
           _execute_browser_action: {

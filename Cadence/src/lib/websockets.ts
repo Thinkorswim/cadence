@@ -12,7 +12,8 @@ type WSMessage =
   | { type: 'cadence:session:skip' }
   | { type: 'cadence:session:complete' }
   | { type: 'cadence:session:request' }
-  | { type: 'cadence:session:update-project'; data: { project: string } };
+  | { type: 'cadence:session:update-project'; data: { project: string } }
+  | { type: 'cadence:session:transition-to-break'; data: { breakType: 'short' | 'long'; autoStart: boolean } };
 
 // WebSocket response types
 type WSResponse =
@@ -28,6 +29,9 @@ type WSResponse =
 
 // Event listeners
 type EventListener<T = any> = (data: T) => void;
+
+// Default WebSocket URL
+const DEFAULT_WS_URL = 'wss://api.groundedmomentum.com/ws';
 
 export class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -47,7 +51,7 @@ export class WebSocketClient {
   }
 
   // Connect to WebSocket server
-  connect(token: string): Promise<void> {
+  connect(token: string): Promise<{ userId: string; connections: number; session: any }> {
     return new Promise((resolve, reject) => {
       this.token = token;
       this.isIntentionallyClosed = false;
@@ -70,7 +74,11 @@ export class WebSocketClient {
               this.startPingInterval();
               this.off('auth:success', authHandler);
               this.off('auth:error', errorHandler);
-              resolve();
+              resolve({
+                userId: data.userId,
+                connections: data.connections,
+                session: data.session
+              });
             }
           };
 
@@ -208,11 +216,11 @@ export class WebSocketClient {
   // Ping/pong for keep-alive
   private startPingInterval() {
     this.stopPingInterval();
-    this.pingInterval = window.setInterval(() => {
+    this.pingInterval = setInterval(() => {
       if (this.isConnected()) {
         this.send({ type: 'ping' });
       }
-    }, 30000); // Ping every 30 seconds
+    }, 30000) as unknown as number; // Ping every 30 seconds
   }
 
   private stopPingInterval() {
@@ -255,6 +263,10 @@ export class WebSocketClient {
     this.send({ type: 'cadence:session:update-project', data: { project } });
   }
 
+  transitionToBreak(breakType: 'short' | 'long', autoStart: boolean) {
+    this.send({ type: 'cadence:session:transition-to-break', data: { breakType, autoStart } });
+  }
+
   syncData(data: unknown) {
     this.send({ type: 'cadence:sync', data });
   }
@@ -285,10 +297,8 @@ export class WebSocketClient {
 let wsClient: WebSocketClient | null = null;
 
 export function getWebSocketClient(url?: string): WebSocketClient {
-  if (!wsClient && url) {
-    wsClient = new WebSocketClient(url);
-  } else if (!wsClient) {
-    throw new Error('WebSocket client not initialized. Provide URL on first call.');
+  if (!wsClient) {
+    wsClient = new WebSocketClient(url || DEFAULT_WS_URL);
   }
   return wsClient;
 }

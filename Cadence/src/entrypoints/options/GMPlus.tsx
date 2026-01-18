@@ -146,7 +146,7 @@ export function GMPlus() {
       const links = await getPaymentManagementLinks(authToken);
       setPaymentManagementLinks(links);
     } catch (error) {
-      console.log("Failed to load payment management links");
+      // Failed to load payment management links
     }
     setIsLoadingManagementLinks(false);
   };

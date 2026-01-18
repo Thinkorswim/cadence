@@ -337,6 +337,20 @@ function Options() {
     }]);
   }, [sessionDuration]);
 
+  // Debounce volume sync - only sync after user stops adjusting for 1 second
+  useEffect(() => {
+    if (!user.isPro) return;
+
+    const timeoutId = setTimeout(() => {
+      browser.storage.local.get(['settings'], (data) => {
+        const settings: Settings = Settings.fromJSON(data.settings) || {};
+        syncUpdateSettings(settings.toJSON());
+      });
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [soundVolume, user.isPro]);
+
 
   // Get the colors from CSS variables
   useEffect(() => {
@@ -367,7 +381,7 @@ function Options() {
   const handleStatisticsLoad = async () => {
     browser.storage.local.get(['dailyStats', 'historicalStats', 'user'], async (data) => {
       const dailyStatistics: DailyStats = DailyStats.fromJSON(data.dailyStats) || new DailyStats();
-      let historicalStatsObj: HistoricalStats = HistoricalStats.fromJSON(data.historicalStats);
+      let historicalStatsObj: HistoricalStats = HistoricalStats.fromJSON(data.historicalStats || {});
 
       // Save completed sessions for the current date
       historicalStatsObj.stats[dailyStatistics.date] = dailyStatistics.completedSessions ? dailyStatistics.completedSessions : [];
@@ -377,7 +391,9 @@ function Options() {
         const backendHistoricalStats = await fetchHistoricalStats();
         if (backendHistoricalStats) {
           // Merge backend data with local data (backend takes precedence for old days, local for today)
-          const mergedStats = { ...backendHistoricalStats };
+          // Convert backend data through fromJSON to ensure proper CompletedSession instances
+          const backendStatsObj = HistoricalStats.fromJSON(backendHistoricalStats);
+          const mergedStats = { ...backendStatsObj.stats };
           mergedStats[dailyStatistics.date] = historicalStatsObj.stats[dailyStatistics.date];
           historicalStatsObj = new HistoricalStats(mergedStats);
           browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
@@ -472,7 +488,6 @@ function Options() {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.soundVolume = volume;
       browser.storage.local.set({ settings: settings.toJSON() });
-      if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
   }
 
