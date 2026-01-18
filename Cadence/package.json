@@ -2,7 +2,7 @@
   "name": "Cadence - Pomodoro Focus Timers",
   "description": "Custom pomodoro timers for focused work and restful breaks.",
   "private": true,
-  "version": "4.0.0.0",
+  "version": "4.1.0.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
