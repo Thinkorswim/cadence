@@ -78,6 +78,19 @@ const SYNC_FIELD_MAPPINGS: SyncFieldMapping[] = [
     },
   },
   { localKey: "dailyStats", backendKey: "dailyStats" },
+  {
+    localKey: "historicalStats",
+    backendKey: "historicalStats",
+    transform: {
+      // Backend stores array of {date, completedSessions}, local stores {stats: {date: completedSessions[]}}
+      toBackend: (data: any) => {
+        return historicalToBackend(data?.stats || data);
+      },
+      toLocal: (data: any) => {
+        return { stats: historicalToLocal(data) };
+      },
+    },
+  },
 ];
 
 // Fetch sync data from backend
@@ -157,7 +170,19 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
           // Move old stats to historical
           if (value.completedSessions && value.completedSessions.length > 0) {
             const localData = await browser.storage.local.get(['historicalStats']);
-            const historicalStats = localData.historicalStats || { stats: {} };
+            // Properly handle historicalStats format - it should have {stats: {...}} structure
+            let historicalStats = localData.historicalStats;
+            
+            // Initialize if doesn't exist or fix if missing stats property
+            if (!historicalStats || !historicalStats.stats) {
+              historicalStats = { stats: {} };
+            }
+            
+            // If historicalStats exists but isn't in the correct format
+            if (Array.isArray(historicalStats)) {
+              historicalStats = { stats: historicalToLocal(historicalStats) };
+            }
+            
             historicalStats.stats[value.date] = value.completedSessions;
             localUpdates.historicalStats = historicalStats;
             
