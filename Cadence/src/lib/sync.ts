@@ -63,15 +63,38 @@ const SYNC_FIELD_MAPPINGS: SyncFieldMapping[] = [
       // Local BlockedWebsites class uses Set for websites, backend uses array
       toBackend: (data: any) => {
         if (!data) return { websites: [], enabled: false };
+        
+        // Convert Set to array or use existing array
+        let websitesArray: any[] = [];
+        if (data.websites instanceof Set) {
+          websitesArray = Array.from(data.websites);
+        } else if (Array.isArray(data.websites)) {
+          websitesArray = data.websites;
+        }
+        
+        // Filter out non-string values (empty objects, null, undefined, etc.)
+        websitesArray = websitesArray.filter((item: any) => 
+          typeof item === 'string' && item.trim().length > 0
+        );
+        
         return {
-          websites: data.websites instanceof Set ? Array.from(data.websites) : (data.websites || []),
+          websites: websitesArray,
           enabled: data.enabled || false,
         };
       },
       toLocal: (data: any) => {
         if (!data) return { websites: new Set<string>(), enabled: false };
+        
+        // Ensure data.websites is an array before filtering
+        const rawWebsites = Array.isArray(data.websites) ? data.websites : [];
+        
+        // Filter to only include valid strings
+        const websitesArray = rawWebsites.filter((item: any) => 
+          typeof item === 'string' && item.trim().length > 0
+        );
+        
         return {
-          websites: new Set(data.websites || []),
+          websites: new Set(websitesArray),
           enabled: data.enabled || false,
         };
       },

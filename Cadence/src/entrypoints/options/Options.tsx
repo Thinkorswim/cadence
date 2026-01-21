@@ -1,7 +1,7 @@
 import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield, Sparkles, CloudOff, CheckCircle2, RefreshCw } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -75,6 +75,10 @@ function Options() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [badgeDisplayFormat, setBadgeDisplayFormat] = useState<BadgeDisplayFormat>(BadgeDisplayFormat.Minutes);
+  
+  const volumeSyncTimeoutRef = useRef<number | null>(null);
+  const isAdjustingVolumeRef = useRef<boolean>(false);
+  const settingsRef = useRef<Settings | null>(null);
 
   const [focusTime, setFocusTime] = useState(25 * 60);
   const [breakTime, setBreakTime] = useState(5 * 60);
@@ -222,11 +226,15 @@ function Options() {
       // Update settings state when storage changes
       if (changes.settings?.newValue) {
         const settings = changes.settings.newValue;
+        settingsRef.current = Settings.fromJSON(settings);
         setFocusAutoStart(settings.focusAutoStart);
         setBreakAutoStart(settings.breakAutoStart);
         setNotificationsEnabled(settings.notificationsEnabled ?? true);
         setSoundEnabled(settings.soundEnabled ?? false);
-        setSoundVolume(settings.soundVolume ?? 0.7);
+        // Don't update volume if user is currently adjusting it
+        if (!isAdjustingVolumeRef.current) {
+          setSoundVolume(settings.soundVolume ?? 0.7);
+        }
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
         setLongBreakTime(settings.longBreakTime || 15 * 60);
@@ -264,6 +272,7 @@ function Options() {
     browser.storage.local.get(['settings', 'sessions'], (result) => {
       if (result.settings) {
         const settings = result.settings;
+        settingsRef.current = Settings.fromJSON(settings);
         setFocusAutoStart(settings.focusAutoStart);
         setBreakAutoStart(settings.breakAutoStart);
         setNotificationsEnabled(settings.notificationsEnabled ?? true);
@@ -337,19 +346,7 @@ function Options() {
     }]);
   }, [sessionDuration]);
 
-  // Debounce volume sync - only sync after user stops adjusting for 1 second
-  useEffect(() => {
-    if (!user.isPro) return;
 
-    const timeoutId = setTimeout(() => {
-      browser.storage.local.get(['settings'], (data) => {
-        const settings: Settings = Settings.fromJSON(data.settings) || {};
-        syncUpdateSettings(settings.toJSON());
-      });
-    }, 1000);
-
-    return () => clearTimeout(timeoutId);
-  }, [soundVolume, user.isPro]);
 
 
   // Get the colors from CSS variables
@@ -483,12 +480,34 @@ function Options() {
   }
 
   const handleVolumeChange = (volume: number) => {
+    // Mark that we're adjusting volume to prevent storage listener from interfering
+    isAdjustingVolumeRef.current = true;
+    
+    // Update state immediately for smooth UI
     setSoundVolume(volume);
-    browser.storage.local.get(['settings'], (data) => {
-      const settings: Settings = Settings.fromJSON(data.settings) || {};
-      settings.soundVolume = volume;
-      browser.storage.local.set({ settings: settings.toJSON() });
-    });
+    
+    // Update settings ref and save to storage
+    if (settingsRef.current) {
+      settingsRef.current.soundVolume = volume;
+      browser.storage.local.set({ settings: settingsRef.current.toJSON() });
+      
+      // Debounce sync - only sync after user stops adjusting for 1 second
+      if (user.isPro) {
+        if (volumeSyncTimeoutRef.current !== null) {
+          clearTimeout(volumeSyncTimeoutRef.current);
+        }
+        volumeSyncTimeoutRef.current = window.setTimeout(() => {
+          syncUpdateSettings(settingsRef.current!.toJSON());
+          // Clear adjustment flag after sync
+          isAdjustingVolumeRef.current = false;
+        }, 1000);
+      } else {
+        // If not pro, clear adjustment flag immediately
+        setTimeout(() => {
+          isAdjustingVolumeRef.current = false;
+        }, 100);
+      }
+    }
   }
 
   const handleSaveLongBreakTime = () => {
