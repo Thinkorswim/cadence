@@ -105,12 +105,13 @@ const SYNC_FIELD_MAPPINGS: SyncFieldMapping[] = [
     localKey: "historicalStats",
     backendKey: "historicalStats",
     transform: {
-      // Backend stores array of {date, completedSessions}, local stores {stats: {date: completedSessions[]}}
+      // Backend stores array of {date, completedSessions}, local stores Record<date, completedSessions[]>
       toBackend: (data: any) => {
+        // Handle both legacy {stats: ...} and new flat structure
         return historicalToBackend(data?.stats || data);
       },
       toLocal: (data: any) => {
-        return { stats: historicalToLocal(data) };
+        return historicalToLocal(data);
       },
     },
   },
@@ -193,24 +194,22 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
           // Move old stats to historical
           if (value.completedSessions && value.completedSessions.length > 0) {
             const localData = await browser.storage.local.get(['historicalStats']);
-            // Properly handle historicalStats format - it should have {stats: {...}} structure
-            let historicalStats = localData.historicalStats;
+            let historicalStats = localData.historicalStats || {};
             
-            // Initialize if doesn't exist or fix if missing stats property
-            if (!historicalStats || !historicalStats.stats) {
-              historicalStats = { stats: {} };
+            // Handle legacy { stats: ... } wrapper if present
+            if (historicalStats.stats) {
+              historicalStats = historicalStats.stats;
             }
-            
-            // If historicalStats exists but isn't in the correct format
+            // Ensure we have a valid object (not array from some other legacy state)
             if (Array.isArray(historicalStats)) {
-              historicalStats = { stats: historicalToLocal(historicalStats) };
+              historicalStats = historicalToLocal(historicalStats);
             }
             
-            historicalStats.stats[value.date] = value.completedSessions;
+            historicalStats[value.date] = value.completedSessions;
             localUpdates.historicalStats = historicalStats;
             
             // Sync the historical update to backend
-            await makeSyncRequest('/api/cadence/historical-day', 'POST', {
+            await makeSyncRequest('/api/cadence/historical-stats/day', 'POST', {
               date: value.date,
               completedSessions: value.completedSessions
             }, 'Error syncing historical day');
@@ -236,6 +235,12 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
         ? mapping.transform.toLocal(value)
         : value;
     }
+  }
+
+  // Merge daily stats into historical stats for local storage (so history view is up to date)
+  if (localUpdates.dailyStats && localUpdates.historicalStats) {
+    // Ensure historicalStats is not null/undefined before assignment
+    localUpdates.historicalStats[localUpdates.dailyStats.date] = localUpdates.dailyStats.completedSessions || [];
   }
 
   await browser.storage.local.set(localUpdates);
@@ -308,7 +313,6 @@ export const syncAll = async (authToken: string): Promise<void> => {
       const success = await pushSyncData(authToken, localData);
       if (success) {
         setSyncStatus("success");
-        setTimeout(() => setSyncStatus("idle"), 2000);
       } else {
         setSyncStatus("error");
       }
@@ -316,7 +320,6 @@ export const syncAll = async (authToken: string): Promise<void> => {
       // Backend has data - apply it locally
       await applyBackendData(backendData);
       setSyncStatus("success");
-      setTimeout(() => setSyncStatus("idle"), 2000);
     }
   } catch (error) {
     console.error("Sync error:", error);

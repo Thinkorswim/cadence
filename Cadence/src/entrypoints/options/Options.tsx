@@ -347,8 +347,6 @@ function Options() {
   }, [sessionDuration]);
 
 
-
-
   // Get the colors from CSS variables
   useEffect(() => {
     const root = document.documentElement;
@@ -383,6 +381,8 @@ function Options() {
       // Save completed sessions for the current date
       historicalStatsObj.stats[dailyStatistics.date] = dailyStatistics.completedSessions ? dailyStatistics.completedSessions : [];
 
+      setHistoricalStats(historicalStatsObj);
+
       // Fetch historical stats from backend for Pro users
       if (data.user?.isPro) {
         const backendHistoricalStats = await fetchHistoricalStats();
@@ -393,13 +393,11 @@ function Options() {
           const mergedStats = { ...backendStatsObj.stats };
           mergedStats[dailyStatistics.date] = historicalStatsObj.stats[dailyStatistics.date];
           historicalStatsObj = new HistoricalStats(mergedStats);
+
+          setHistoricalStats(historicalStatsObj);
           browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
         }
-      } else {
-        browser.storage.local.set({ historicalStats: historicalStatsObj.toJSON() });
-      }
-
-      setHistoricalStats(historicalStatsObj);
+      }       
     });
   }
 
