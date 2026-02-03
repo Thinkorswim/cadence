@@ -122,6 +122,25 @@ function Popup() {
         if (!data.session?.project) {
           setSelectedProject(settings.selectedProject || "General");
         }
+
+        // Fix: If session is stopped and in focus mode, ensure we display the configured focus time
+        // This handles the case where settings were updated (synced) but the session object in storage is stale
+        const currentSession = data.session ? Session.fromJSON(data.session) : null;
+        if (currentSession && 
+            currentSession.status === SessionStatus.Stopped && 
+            currentSession.timerState === TimerState.Focus) {
+            
+            if (settings.focusTime && settings.focusTime !== currentSession.focusDuration) {
+                setTimerTime(settings.focusTime);
+                
+                // Update local session state to match settings
+                currentSession.focusDuration = settings.focusTime;
+                setSession(currentSession);
+                
+                // Ensure the progress circle is full
+                setEndAngle(90 + 360);
+            }
+        }
       }
       
       if (data.dailyStats) {

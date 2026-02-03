@@ -258,6 +258,18 @@ function Options() {
         const stats = HistoricalStats.fromJSON(changes.historicalStats.newValue);
         setHistoricalStats(stats);
       }
+
+      // Update daily stats in historical stats when dailyStats changes
+      if (changes.dailyStats?.newValue) {
+        setHistoricalStats(prevStats => {
+          const newStats = new HistoricalStats({ ...prevStats.stats });
+          const dailyStats = DailyStats.fromJSON(changes.dailyStats.newValue);
+          if (dailyStats) {
+            newStats.stats[dailyStats.date] = dailyStats.completedSessions;
+          }
+          return newStats;
+        });
+      }
     };
 
     browser.storage.onChanged.addListener(handleStorageChange);
@@ -728,6 +740,13 @@ function Options() {
         }
 
         browser.storage.local.set({ dailyStats: dailyStats.toJSON() });
+        
+        // Update local state immediately
+        setHistoricalStats(prev => {
+          const newStats = new HistoricalStats({ ...prev.stats });
+          newStats.stats[today] = dailyStats.completedSessions;
+          return newStats;
+        });
         
         // Sync daily stats for Pro users
         if (user.isPro) syncUpdateDailyStats(dailyStats.toJSON());

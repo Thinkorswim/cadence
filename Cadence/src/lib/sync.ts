@@ -94,7 +94,7 @@ const SYNC_FIELD_MAPPINGS: SyncFieldMapping[] = [
         );
         
         return {
-          websites: new Set(websitesArray),
+          websites: websitesArray,
           enabled: data.enabled || false,
         };
       },
@@ -243,6 +243,7 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
     localUpdates.historicalStats[localUpdates.dailyStats.date] = localUpdates.dailyStats.completedSessions || [];
   }
 
+  console.log("Local updates:", localUpdates);
   await browser.storage.local.set(localUpdates);
 };
 
