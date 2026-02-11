@@ -13,6 +13,7 @@ export class Settings {
     public notificationsEnabled: boolean = true, // Default to notifications enabled
     public soundEnabled: boolean = true, // Default to sound enabled
     public soundVolume: number = 0.7, // Default to 70% volume
+    public selectedSound: string = 'relaxing.ogg', // Default to relaxing.ogg
     public dailySessionsGoal: number = 10, // Default to 10 sessions per day
     public preferredChartType: ChartType = ChartType.Sessions, // Default to sessions chart
     public badgeDisplayFormat: BadgeDisplayFormat = BadgeDisplayFormat.Minutes, // Default to minutes format
@@ -31,6 +32,7 @@ export class Settings {
     notificationsEnabled: boolean;
     soundEnabled: boolean;
     soundVolume: number;
+    selectedSound: string;
     dailySessionsGoal: number;
     preferredChartType: ChartType;
     badgeDisplayFormat: BadgeDisplayFormat;
@@ -48,6 +50,7 @@ export class Settings {
         notificationsEnabled: this.notificationsEnabled,
         soundEnabled: this.soundEnabled,
         soundVolume: this.soundVolume,
+        selectedSound: this.selectedSound,
         dailySessionsGoal: this.dailySessionsGoal,
         preferredChartType: this.preferredChartType,
         badgeDisplayFormat: this.badgeDisplayFormat,
@@ -67,6 +70,7 @@ export class Settings {
     notificationsEnabled?: boolean;
     soundEnabled?: boolean;
     soundVolume?: number;
+    selectedSound?: string;
     dailySessionsGoal?: number;
     preferredChartType?: ChartType;
     badgeDisplayFormat?: BadgeDisplayFormat;
@@ -86,6 +90,7 @@ export class Settings {
         json.notificationsEnabled ?? true, // Default to notifications enabled
         json.soundEnabled ?? false, // Default to sound disabled
         json.soundVolume ?? 0.7, // Default to 70% volume
+        json.selectedSound ?? 'relaxing.ogg', // Default to relaxing.ogg
         json.dailySessionsGoal ?? 10, // Default to 10 if goal not provided
         json.preferredChartType ?? ChartType.Sessions, // Default to sessions if not provided
         json.badgeDisplayFormat ?? BadgeDisplayFormat.Minutes, // Default to minutes format

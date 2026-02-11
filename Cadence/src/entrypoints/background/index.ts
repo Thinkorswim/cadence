@@ -51,10 +51,11 @@ export default defineBackground(() => {
     const playNotificationSound = async (settings: Settings) => {
         try {
             if (settings.soundEnabled) {
+                const soundFile = `/sounds/${settings.selectedSound}`;
                 // Check if we're in Firefox or if offscreen API is not available
                 if (import.meta.env.BROWSER === 'firefox' || !browser.offscreen) {
                     try {
-                        const audio = new Audio(browser.runtime.getURL('/sounds/alarm.wav'));
+                        const audio = new Audio(browser.runtime.getURL(soundFile as any));
                         audio.volume = Math.max(0, Math.min(1, settings.soundVolume));
                         await audio.play();
                     } catch (error) {
@@ -65,7 +66,7 @@ export default defineBackground(() => {
                     await createOffscreenDocument();
                     browser.runtime.sendMessage({
                         action: 'playSound',
-                        soundFile: '/sounds/alarm.wav',
+                        soundFile: soundFile,
                         volume: settings.soundVolume
                     });
                 }
@@ -394,6 +395,7 @@ export default defineBackground(() => {
                     notificationsEnabled: true, // Default to notifications enabled
                     soundEnabled: true, // Default to sound enabled
                     soundVolume: 0.7, // Default to 70% volume
+                    selectedSound: 'relaxing.ogg', // Default to relaxing.ogg
                     dailySessionsGoal: 10, // Default to 10 sessions per day
                     badgeDisplayFormat: BadgeDisplayFormat.Minutes, // Default to minutes format
                     projects: ['General'], // Default to General project
@@ -444,6 +446,11 @@ export default defineBackground(() => {
 
                 if (data.settings.badgeDisplayFormat === undefined) {
                     updatedSettings.badgeDisplayFormat = BadgeDisplayFormat.Minutes;
+                    needsUpdate = true;
+                }
+
+                if (data.settings.selectedSound === undefined) {
+                    updatedSettings.selectedSound = 'relaxing.ogg';
                     needsUpdate = true;
                 }
                 

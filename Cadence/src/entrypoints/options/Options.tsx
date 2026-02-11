@@ -2,7 +2,7 @@ import './style.css';
 import '~/assets/global.css';
 import { Button } from '@/components/ui/button'
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield, Sparkles, CloudOff, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Dot, ChartNoAxesColumn, Info, Pencil, Clock, ChevronsUpDown, Check, Shield, Sparkles, CloudOff, CheckCircle2, RefreshCw, Volume2 } from 'lucide-react'
 import { Settings as SettingsIcon } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from '@/components/ui/label';
@@ -74,6 +74,22 @@ function Options() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
+  const [selectedSound, setSelectedSound] = useState('relaxing.ogg');
+
+  // Available notification sounds
+  const availableSounds = [
+    { value: 'airplane.ogg', label: 'Airplane' },
+    { value: 'alarm.ogg', label: 'Alarm' },
+    { value: 'battleship.ogg', label: 'Battleship' },
+    { value: 'buzzer.ogg', label: 'Buzzer' },
+    { value: 'christmas.ogg', label: 'Christmas' },
+    { value: 'church.ogg', label: 'Church Bell' },
+    { value: 'eastern.ogg', label: 'Eastern' },
+    { value: 'game.ogg', label: 'Game' },
+    { value: 'guitar.ogg', label: 'Guitar' },
+    { value: 'happy.ogg', label: 'Happy' },
+    { value: 'relaxing.ogg', label: 'Relaxing' },
+  ];
   const [badgeDisplayFormat, setBadgeDisplayFormat] = useState<BadgeDisplayFormat>(BadgeDisplayFormat.Minutes);
   
   const volumeSyncTimeoutRef = useRef<number | null>(null);
@@ -235,6 +251,7 @@ function Options() {
         if (!isAdjustingVolumeRef.current) {
           setSoundVolume(settings.soundVolume ?? 0.7);
         }
+        setSelectedSound(settings.selectedSound ?? 'relaxing.ogg');
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
         setLongBreakTime(settings.longBreakTime || 15 * 60);
@@ -290,6 +307,7 @@ function Options() {
         setNotificationsEnabled(settings.notificationsEnabled ?? true);
         setSoundEnabled(settings.soundEnabled ?? false);
         setSoundVolume(settings.soundVolume ?? 0.7);
+        setSelectedSound(settings.selectedSound ?? 'relaxing.ogg');
         setFocusTime(settings.focusTime);
         setBreakTime(settings.shortBreakTime);
         setLongBreakTime(settings.longBreakTime || 15 * 60);
@@ -518,6 +536,22 @@ function Options() {
         }, 100);
       }
     }
+  }
+
+  const handleSoundChange = (sound: string) => {
+    setSelectedSound(sound);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.selectedSound = sound;
+      browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
+    });
+  }
+
+  const handlePreviewSound = () => {
+    const audio = new Audio(browser.runtime.getURL(`/sounds/${selectedSound}` as any));
+    audio.volume = soundVolume;
+    audio.play();
   }
 
   const handleSaveLongBreakTime = () => {
@@ -1322,35 +1356,103 @@ function Options() {
                   </div>
 
                   {soundEnabled && (
-                    <div className="max-w-[300px] mt-5">
-                      <div className="flex items-center mb-3">
-                        <Label className='text-base' htmlFor="soundVolume">Volume</Label>
-                        <TooltipProvider>
-                          <Tooltip delayDuration={0}>
-                            <TooltipTrigger asChild>
-                              <button className="flex items-center justify-center ml-2 rounded-full">
-                                <Info className="w-4 h-4 text-secondary" />
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent className="bg-secondary text-white p-2 rounded">
-                              Adjust the volume of sound notifications (0% - 100%).
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <span className="ml-auto text-sm text-secondary">
-                          {Math.round(soundVolume * 100)}%
-                        </span>
+                    <>
+                      <div className="max-w-[300px] mt-5">
+                        <div className="flex items-center mb-3">
+                          <Label className='text-base' htmlFor="soundVolume">Volume</Label>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <button className="flex items-center justify-center ml-2 rounded-full">
+                                  <Info className="w-4 h-4 text-secondary" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-secondary text-white p-2 rounded">
+                                Adjust the volume of sound notifications (0% - 100%).
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <span className="ml-auto text-sm text-secondary">
+                            {Math.round(soundVolume * 100)}%
+                          </span>
+                        </div>
+                        <Slider
+                          id="soundVolume"
+                          value={[soundVolume]}
+                          onValueChange={(value) => handleVolumeChange(value[0])}
+                          max={1}
+                          min={0}
+                          step={0.01}
+                          className="w-full"
+                        />
                       </div>
-                      <Slider
-                        id="soundVolume"
-                        value={[soundVolume]}
-                        onValueChange={(value) => handleVolumeChange(value[0])}
-                        max={1}
-                        min={0}
-                        step={0.01}
-                        className="w-full"
-                      />
-                    </div>
+
+                      <div className="max-w-[300px] mt-5">
+                        <div className="flex items-center mb-3">
+                          <Label className='text-base' htmlFor="selectedSound">Notification Sound</Label>
+                          <TooltipProvider>
+                            <Tooltip delayDuration={0}>
+                              <TooltipTrigger asChild>
+                                <button className="flex items-center justify-center ml-2 rounded-full">
+                                  <Info className="w-4 h-4 text-secondary" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="bg-secondary text-white p-2 rounded">
+                                Choose which sound to play when a session completes.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-[200px] justify-between bg-background hover:bg-background"
+                              >
+                                {availableSounds.find(s => s.value === selectedSound)?.label || 'Select sound...'}
+                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[200px] p-0">
+                              <Command className='bg-background'>
+                                <CommandList>
+                                  <ScrollArea viewportClassName="max-h-[250px]">
+                                    <CommandGroup className="bg-background">
+                                      {availableSounds.map((sound) => (
+                                        <CommandItem
+                                          key={sound.value}
+                                          value={sound.value}
+                                          onSelect={() => handleSoundChange(sound.value)}
+                                          className="flex items-center gap-2 "
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "h-4 w-4",
+                                              selectedSound === sound.value ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          {sound.label}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </ScrollArea>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                          <Button
+                            onClick={handlePreviewSound}
+                            variant="secondary"
+                            className="bg-muted shadow-none hover:bg-muted text-primary"
+                            size="sm"
+                          >
+                            <Volume2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    </>
                   )}
 
                   <div className="max-w-[300px] mt-8">
