@@ -48,27 +48,18 @@ import { loadUserFromStorage } from '@/lib/auth';
 import { getSyncStatus, subscribeSyncStatus, syncAll, syncUpdateSettings, syncDeleteBlockedWebsite, syncToggleBlockedWebsites, syncAddHistoricalDay, syncUpdateDailyStats, fetchHistoricalStats, type SyncStatus } from '@/lib/sync';
 
 function Options() {
-  const [ctaProperty, setCtaProperty] = useState<string>('');
-  const [ctaDiscordText, setCtaDiscordText] = useState<string>('');
+  const ctaDiscordTexts: string[] = [
+    'Have a question? Join the',
+    'Need help? Join the',
+    'Have a suggestion? Join the',
+    'Want to chat? Join the',
+    'Like productivity? Join the',
+    'Have feedback? Join the',
+  ];
+  const [ctaDiscordText] = useState<string>(
+    ctaDiscordTexts[Math.floor(Math.random() * ctaDiscordTexts.length)]
+  );
 
-  const selectCallToAction = () => {
-    const randomProperty = Math.random() < 0.5 ? 'discord' : 'github';
-    setCtaProperty(randomProperty);
-
-    if (randomProperty === 'discord') {
-      const ctaDiscordTexts: string[] = [
-        'Have a question? Join the',
-        'Need help? Join the',
-        'Have a suggestion? Join the',
-        'Want to chat? Join the',
-        'Like productivity? Join the',
-        'Have feedback? Join the',
-      ];
-
-      const randomIndex = Math.floor(Math.random() * ctaDiscordTexts.length);
-      setCtaDiscordText(ctaDiscordTexts[randomIndex]);
-    }
-  };
   const [breakAutoStart, setBreakAutoStart] = useState(false);
   const [focusAutoStart, setFocusAutoStart] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -294,9 +285,6 @@ function Options() {
   }, []);
 
   useEffect(() => {
-    // Select a random call to action on mount
-    selectCallToAction();
-
     // Load settings from browser storage
     browser.storage.local.get(['settings', 'sessions'], (result) => {
       if (result.settings) {
@@ -2092,34 +2080,12 @@ function Options() {
             <a href="https://groundedmomentum.com/" target="_blank" rel="noopener noreferrer" className="flex items-center text-secondary font-semibold transition-colors">
               <img src="/images/gm_logo_red.svg" alt="Grounded Momentum Logo" className="w-6 h-6 mr-2" /> Grounded Momentum <Dot className='w-2 h-2 mx-1' /> 2026
             </a>            
-            {ctaProperty === 'discord' ? (
-              <div className="flex items-center text-secondary font-semibold">
+            <div className="flex items-center text-secondary font-semibold">
                 {ctaDiscordText}
                 <div className='flex items-center'>
                   <Button className="ml-3 rounded-lg" onClick={() => { window.open("https://discord.gg/SvTsqKwsgN", "_blank") }}>  <img height="20" width="20" className="mr-1 color-white" src="https://cdn.simpleicons.org/discord/ffffff" /> Discord </Button>
                 </div>
               </div>
-            ) : (
-              <div className="flex items-center text-secondary font-semibold">
-                Want to restrict distractions? Try
-                <div className='flex items-center'>
-                  <Button
-                    className="ml-3 rounded-lg bg-background hover:bg-[#5c4523]/20 text-[#5c4523]"
-                    onClick={() => {
-                      let url = "https://chromewebstore.google.com/detail/time-snatch-block-website/epamlgdeklcjkldoaclgjdmjnchdgbho";
-                      if (import.meta.env.BROWSER === "firefox") {
-                        url = "https://addons.mozilla.org/en-US/firefox/addon/time-snatch-block-websites/";
-                      } else if (import.meta.env.BROWSER === "edge") {
-                        url = "https://microsoftedge.microsoft.com/addons/detail/time-snatch-block-websi/lpaajokgonohalagaibbjbnnelcdfckg";
-                      }
-                      window.open(url, "_blank");
-                    }}
-                  >
-                    <img src="/images/logo-time-snatch.svg" alt="Logo" className="w-5 h-5" /> Time Snatch
-                  </Button>
-                </div>
-              </div>
-            )}
           </div>
         </footer>
       </div>
