@@ -63,6 +63,7 @@ function Options() {
   const [breakAutoStart, setBreakAutoStart] = useState(false);
   const [focusAutoStart, setFocusAutoStart] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [newTabNotification, setNewTabNotification] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [soundVolume, setSoundVolume] = useState(0.7);
   const [selectedSound, setSelectedSound] = useState('relaxing.ogg');
@@ -237,6 +238,7 @@ function Options() {
         setFocusAutoStart(settings.focusAutoStart);
         setBreakAutoStart(settings.breakAutoStart);
         setNotificationsEnabled(settings.notificationsEnabled ?? true);
+        setNewTabNotification(settings.newTabNotification ?? false);
         setSoundEnabled(settings.soundEnabled ?? false);
         // Don't update volume if user is currently adjusting it
         if (!isAdjustingVolumeRef.current) {
@@ -293,6 +295,7 @@ function Options() {
         setFocusAutoStart(settings.focusAutoStart);
         setBreakAutoStart(settings.breakAutoStart);
         setNotificationsEnabled(settings.notificationsEnabled ?? true);
+        setNewTabNotification(settings.newTabNotification ?? false);
         setSoundEnabled(settings.soundEnabled ?? false);
         setSoundVolume(settings.soundVolume ?? 0.7);
         setSelectedSound(settings.selectedSound ?? 'relaxing.ogg');
@@ -480,6 +483,16 @@ function Options() {
     browser.storage.local.get(['settings'], (data) => {
       const settings: Settings = Settings.fromJSON(data.settings) || {};
       settings.notificationsEnabled = checked;
+      browser.storage.local.set({ settings: settings.toJSON() });
+      if (user.isPro) syncUpdateSettings(settings.toJSON());
+    });
+  }
+
+  const handleToggleNewTabNotification = (checked: boolean) => {
+    setNewTabNotification(checked);
+    browser.storage.local.get(['settings'], (data) => {
+      const settings: Settings = Settings.fromJSON(data.settings) || {};
+      settings.newTabNotification = checked;
       browser.storage.local.set({ settings: settings.toJSON() });
       if (user.isPro) syncUpdateSettings(settings.toJSON());
     });
@@ -1316,6 +1329,30 @@ function Options() {
                       className='data-[state=unchecked]:bg-white'
                       checked={notificationsEnabled}
                       onCheckedChange={handleToggleNotifications}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between max-w-[300px] mt-5">
+                    <div className="flex items-center">
+                      <Label className='text-base' htmlFor="newTabNotification">New Tab Notification</Label>
+                      <TooltipProvider>
+                        <Tooltip delayDuration={0}>
+                          <TooltipTrigger asChild>
+                            <button className="flex items-center justify-center ml-2 rounded-full">
+                              <Info className="w-4 h-4 text-secondary" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent className="bg-secondary text-white p-2 rounded">
+                            Open a new tab when a session or break ends.
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                    <Switch
+                      id="newTabNotification"
+                      className='data-[state=unchecked]:bg-white'
+                      checked={newTabNotification}
+                      onCheckedChange={handleToggleNewTabNotification}
                     />
                   </div>
 

@@ -93,7 +93,30 @@ function Popup() {
       if (data.user?.isPro) {
         setIsProUser(true);
         if (data.user?.authToken) {
-          syncAll(data.user.authToken);
+          syncAll(data.user.authToken).then(() => {
+            browser.storage.local.get(["dailyStats", "settings", "session"], (syncedData) => {
+              if (syncedData.dailyStats) {
+                const dailyStats: DailyStats = DailyStats.fromJSON(syncedData.dailyStats);
+                const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
+                if (dailyStats.date === today) {
+                  setCompletedSessions(dailyStats.completedSessions ? dailyStats.completedSessions.length : 0);
+                } else {
+                  setCompletedSessions(0);
+                }
+              }
+
+              if (syncedData.settings) {
+                const settings: Settings = Settings.fromJSON(syncedData.settings);
+                setDailySessionsGoal(settings.dailySessionsGoal || 10);
+                setProjects(settings.projects.map(p => ({ value: p, label: p })));
+
+                // Only update selected project from settings if no active session is overriding it
+                if (!syncedData.session?.project) {
+                  setSelectedProject(settings.selectedProject || "General");
+                }
+              }
+            });
+          });
         }
       }
       

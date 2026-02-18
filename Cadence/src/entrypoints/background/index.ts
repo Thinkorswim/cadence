@@ -84,16 +84,38 @@ export default defineBackground(() => {
             }
             
             wsClient = getWebSocketClient();
-            const authResponse = await wsClient.connect(authToken);
-            
-            // Use session from auth response (no need for extra request)
-            if (authResponse.session) {
-                const sessionData = authResponse.session;
+
+            // Helper: apply a session received from the server (auth:success or reconnect).
+            // Handles null (server has no session) and all running/paused/stopped states.
+            const applySessionFromWebSocket = (sessionData: any) => {
+                if (!sessionData) {
+                    // Server has no active session — stop the local timer and transition to stopped
+                    if (timer) {
+                        clearInterval(timer);
+                        timer = null;
+                    }
+                    browser.storage.local.get(["session"], (data) => {
+                        if (data.session) {
+                            const session = Session.fromJSON(data.session);
+                            if (session.status !== SessionStatus.Stopped) {
+                                session.status = SessionStatus.Stopped;
+                                session.accumulatedTime = 0;
+                                session.currentRunStartedAt = null;
+                                session.timerState = TimerState.Focus;
+                                setBadge("", "red");
+                                browser.storage.local.set({ session: session.toJSON() });
+                                browser.runtime.sendMessage({ action: "updateSession", session });
+                            }
+                        }
+                    });
+                    return;
+                }
+
                 const remoteSession = Session.fromJSON({
                     accumulatedTime: sessionData.accumulatedTime,
-                    timerState: sessionData.timerState === 'focus' ? TimerState.Focus : 
+                    timerState: sessionData.timerState === 'focus' ? TimerState.Focus :
                                sessionData.timerState === 'short_break' ? TimerState.ShortBreak : TimerState.LongBreak,
-                    status: sessionData.status === 'running' ? SessionStatus.Running : 
+                    status: sessionData.status === 'running' ? SessionStatus.Running :
                            sessionData.status === 'paused' ? SessionStatus.Paused : SessionStatus.Stopped,
                     createdAt: sessionData.createdAt,
                     currentRunStartedAt: sessionData.currentRunStartedAt,
@@ -102,22 +124,45 @@ export default defineBackground(() => {
                     shortBreakDuration: sessionData.shortBreakDuration,
                     longBreakDuration: sessionData.longBreakDuration
                 });
-                
-                // Sync timer state with remote session
+
                 if (remoteSession.status === SessionStatus.Running) {
                     if (!timer) {
                         timer = setInterval(() => updateTime(), 1000);
                     }
+                    const now = new Date();
+                    const remainingTime = remoteSession.getRemainingTime(now);
+                    const badgeColor = remoteSession.timerState === TimerState.Focus ? "red" : "green";
+                    setBadge(timeDisplayFormatBadge(remainingTime, cachedBadgeDisplayFormat), badgeColor);
                 } else {
                     if (timer) {
                         clearInterval(timer);
                         timer = null;
                     }
+                    if (remoteSession.status === SessionStatus.Stopped) {
+                        const badgeColor = remoteSession.timerState === TimerState.Focus ? "red" : "green";
+                        setBadge("", badgeColor);
+                    } else if (remoteSession.status === SessionStatus.Paused) {
+                        const now = new Date();
+                        const remainingTime = remoteSession.getRemainingTime(now);
+                        const badgeColor = remoteSession.timerState === TimerState.Focus ? "red" : "green";
+                        setBadge(timeDisplayFormatBadge(remainingTime, cachedBadgeDisplayFormat), badgeColor);
+                    }
                 }
-                
+
                 browser.storage.local.set({ session: remoteSession.toJSON() });
                 browser.runtime.sendMessage({ action: "updateSession", session: remoteSession });
-            }
+            };
+
+            const authResponse = await wsClient.connect(authToken);
+
+            // Apply session from the initial auth response
+            applySessionFromWebSocket(authResponse.session);
+
+            // Wire up a persistent listener so reconnects (scheduleReconnect inside WebSocketClient)
+            // also re-sync the session from auth:success — previously this was silently dropped
+            wsClient.on('auth:success', (data) => {
+                applySessionFromWebSocket(data.session);
+            });
             
             // Listen for session updates from other devices
             wsClient.onSessionUpdate((sessionData) => {
@@ -669,6 +714,18 @@ export default defineBackground(() => {
                             session.shortBreakDuration = settings.shortBreakTime;
                         }
 
+                        // Open new tab notification if enabled (after break type is determined)
+                        if (settings.newTabNotification) {
+                            const breakDuration = shouldTakeLongBreak ? settings.longBreakTime : settings.shortBreakTime;
+                            const params = new URLSearchParams({
+                                type: 'focus-complete',
+                                duration: String(session.focusDuration),
+                                breakDuration: String(breakDuration),
+                                project: session.project || 'General',
+                            });
+                            browser.tabs.create({ url: browser.runtime.getURL(`/notification.html?${params}`) });
+                        }
+
                         session.accumulatedTime = 0;
                         session.createdAt = new Date();
 
@@ -723,6 +780,15 @@ export default defineBackground(() => {
                                     title: 'Break Ended',
                                     message: 'Time to focus again'
                                 });
+                            }
+
+                            // Open new tab notification if enabled
+                            if (settings.newTabNotification) {
+                                const params = new URLSearchParams({
+                                    type: 'break-ended',
+                                    duration: String(session.shortBreakDuration),
+                                });
+                                browser.tabs.create({ url: browser.runtime.getURL(`/notification.html?${params}`) });
                             }
 
                             // Play notification sound if enabled
@@ -791,6 +857,15 @@ export default defineBackground(() => {
                                     title: 'Long Break Ended',
                                     message: 'Time to focus again'
                                 });
+                            }
+
+                            // Open new tab notification if enabled
+                            if (settings.newTabNotification) {
+                                const params = new URLSearchParams({
+                                    type: 'break-ended',
+                                    duration: String(session.longBreakDuration),
+                                });
+                                browser.tabs.create({ url: browser.runtime.getURL(`/notification.html?${params}`) });
                             }
 
                             // Play notification sound if enabled

@@ -18,7 +18,8 @@ export class Settings {
     public preferredChartType: ChartType = ChartType.Sessions, // Default to sessions chart
     public badgeDisplayFormat: BadgeDisplayFormat = BadgeDisplayFormat.Minutes, // Default to minutes format
     public projects: string[] = ['General'], // Default to General project
-    public selectedProject: string = 'General' // Default to General project
+    public selectedProject: string = 'General', // Default to General project
+    public newTabNotification: boolean = false // Default to new tab notifications disabled
   ) {}
 
   toJSON(): { 
@@ -38,6 +39,7 @@ export class Settings {
     badgeDisplayFormat: BadgeDisplayFormat;
     projects: string[];
     selectedProject: string;
+    newTabNotification: boolean;
    } {
     return {
         focusTime: this.focusTime,
@@ -56,6 +58,7 @@ export class Settings {
         badgeDisplayFormat: this.badgeDisplayFormat,
         projects: this.projects,
         selectedProject: this.selectedProject,
+        newTabNotification: this.newTabNotification,
     };
   }
 
@@ -76,6 +79,7 @@ export class Settings {
     badgeDisplayFormat?: BadgeDisplayFormat;
     projects?: string[];
     selectedProject?: string;
+    newTabNotification?: boolean;
    }): Settings {
     const projects = json.projects ?? ['General'];
     
@@ -95,7 +99,8 @@ export class Settings {
         json.preferredChartType ?? ChartType.Sessions, // Default to sessions if not provided
         json.badgeDisplayFormat ?? BadgeDisplayFormat.Minutes, // Default to minutes format
         projects,
-        json.selectedProject ?? (projects.length > 0 ? projects[0] : 'General') // Default to first project or General
+        json.selectedProject ?? (projects.length > 0 ? projects[0] : 'General'), // Default to first project or General
+        json.newTabNotification ?? false // Default to new tab notifications disabled
     );
   }
 }
