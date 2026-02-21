@@ -182,16 +182,18 @@ const getLocalSyncData = async (): Promise<Record<string, any>> => {
 // Apply backend data to local storage
 const applyBackendData = async (backendData: Record<string, any>): Promise<void> => {
   const localUpdates: Record<string, any> = {};
+  const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
+
+  // Read current local data upfront so we can protect it against stale backend overwrites
+  const existingLocal = await browser.storage.local.get(['dailyStats']);
 
   for (const mapping of SYNC_FIELD_MAPPINGS) {
     const value = backendData[mapping.backendKey];
     if (value !== undefined) {
       // Special handling for dailyStats - check if the date is old
       if (mapping.localKey === 'dailyStats' && value?.date) {
-        const today = new Date().toLocaleDateString('en-CA').slice(0, 10);
-        
         if (value.date !== today) {
-          // Move old stats to historical
+          // Backend has yesterday's stats — move them to historical
           if (value.completedSessions && value.completedSessions.length > 0) {
             const localData = await browser.storage.local.get(['historicalStats']);
             let historicalStats = localData.historicalStats || {};
@@ -215,19 +217,43 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
             }, 'Error syncing historical day');
           }
           
-          // Create fresh dailyStats for today
-          localUpdates.dailyStats = {
-            date: today,
-            completedSessions: []
-          };
+          // Set today's dailyStats, preserving any sessions already recorded locally today.
+          // Without this check, a stale backend date would reset today's local sessions to [].
+          const localHasToday = existingLocal.dailyStats?.date === today &&
+                                 (existingLocal.dailyStats?.completedSessions?.length ?? 0) > 0;
+          const todayStats = localHasToday
+            ? existingLocal.dailyStats
+            : { date: today, completedSessions: [] };
+
+          localUpdates.dailyStats = todayStats;
           
-          // Update backend with today's empty stats
-          await makeSyncRequest('/api/cadence/daily-stats', 'PUT', {
-            date: today,
-            completedSessions: []
-          }, 'Error syncing updated daily stats');
+          // Push today's stats to backend so it is no longer behind
+          await makeSyncRequest('/api/cadence/daily-stats', 'PUT', todayStats, 'Error syncing updated daily stats');
           
           continue; // Skip the normal mapping logic
+        } else {
+          // Backend and local are both today — merge sessions from both sides so neither
+          // device loses sessions it recorded before the last sync.
+          const localSessions: any[] = existingLocal.dailyStats?.completedSessions ?? [];
+          const backendSessions: any[] = value.completedSessions ?? [];
+
+          const byTime = new Map<string, any>();
+          for (const s of backendSessions) byTime.set(s.timeStarted, s);
+          for (const s of localSessions) byTime.set(s.timeStarted, s);
+
+          const mergedSessions = Array.from(byTime.values())
+            .sort((a, b) => new Date(a.timeStarted).getTime() - new Date(b.timeStarted).getTime());
+
+          const mergedDailyStats = { date: today, completedSessions: mergedSessions };
+
+          // Push merged result if it differs from what the backend already has
+          if (mergedSessions.length !== backendSessions.length) {
+            await makeSyncRequest('/api/cadence/daily-stats', 'PUT', mergedDailyStats, 'Error syncing merged daily stats');
+          }
+
+          // Store merged result locally regardless
+          localUpdates.dailyStats = mergedDailyStats;
+          continue;
         }
       }
       
@@ -243,7 +269,6 @@ const applyBackendData = async (backendData: Record<string, any>): Promise<void>
     localUpdates.historicalStats[localUpdates.dailyStats.date] = localUpdates.dailyStats.completedSessions || [];
   }
 
-  console.log("Local updates:", localUpdates);
   await browser.storage.local.set(localUpdates);
 };
 
@@ -388,15 +413,3 @@ export const fetchHistoricalStats = async (): Promise<Record<string, any[]> | nu
   }
 };
 
-// Push all local data to backend (used on day reset or manual sync)
-export const syncPushAll = async (): Promise<void> => {
-  const authToken = await getAuthTokenAndCheckPro();
-  if (!authToken) return;
-
-  try {
-    const localData = await getLocalSyncData();
-    await pushSyncData(authToken, localData);
-  } catch (error) {
-    console.error("Error pushing all data:", error);
-  }
-};

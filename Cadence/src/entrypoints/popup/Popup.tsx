@@ -77,14 +77,6 @@ function Popup() {
     if (browser && browser.runtime && browser.runtime.sendMessage) {
       browser.runtime.sendMessage({ action: "updateSessionProject", project });
     }
-    
-    browser.storage.local.get(["settings"], (data) => {
-      if (data.settings) {
-        const settings = Settings.fromJSON(data.settings);
-        settings.selectedProject = project;
-        browser.storage.local.set({ settings: settings.toJSON() });
-      }
-    });
   }
 
   useEffect(() => {

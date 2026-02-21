@@ -36,6 +36,7 @@ import { BlockedWebsiteForm } from './BlockedWebsiteForm';
 import { Session } from '@/models/Session';
 import { CompletedSession } from '@/models/CompletedSession';
 import { TimerState } from '@/models/TimerState';
+import { SessionStatus } from '@/models/SessionStatus';
 import { DailyStats } from '@/models/DailyStats';
 import { HistoricalStats } from '@/models/HistoricalStats';
 import { ChartType } from '@/models/ChartType';
@@ -429,11 +430,15 @@ function Options() {
       const session: Session = Session.fromJSON(data.session) || new Session();
 
       settings.focusTime = focusTime;
-      if (session.timerState === TimerState.Focus) {
+
+      // Only update the live session duration if it is stopped
+      const updates: Record<string, any> = { settings: settings.toJSON() };
+      if (session.timerState === TimerState.Focus && session.status !== SessionStatus.Running) {
         session.focusDuration = focusTime;
+        updates.session = session.toJSON();
       }
 
-      browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
+      browser.storage.local.set(updates, () => {
         setFocusTimeDialogOpen(false);
         if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
@@ -446,11 +451,15 @@ function Options() {
       const session: Session = Session.fromJSON(data.session) || new Session();
 
       settings.shortBreakTime = breakTime;
-      if (session.timerState === TimerState.ShortBreak) {
+
+      // Only update the live session duration if it is stopped
+      const updates: Record<string, any> = { settings: settings.toJSON() };
+      if (session.timerState === TimerState.ShortBreak && session.status !== SessionStatus.Running) {
         session.shortBreakDuration = breakTime;
+        updates.session = session.toJSON();
       }
 
-      browser.storage.local.set({ settings: settings.toJSON(), session: session.toJSON() }, () => {
+      browser.storage.local.set(updates, () => {
         setShortBreakDialogOpen(false);
         if (user.isPro) syncUpdateSettings(settings.toJSON());
       });
